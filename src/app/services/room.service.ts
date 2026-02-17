@@ -1,6 +1,7 @@
 import { Injectable, signal, computed, DestroyRef, inject } from '@angular/core';
 import * as Y from 'yjs';
-import { WebrtcProvider } from 'y-webrtc';
+import YPartyKitProvider from 'y-partykit/provider';
+import { environment } from '../../environments/environment';
 
 export interface Player {
   name: string;
@@ -17,7 +18,7 @@ export interface HistoryEntry {
 @Injectable({ providedIn: 'root' })
 export class RoomService {
   private doc: Y.Doc | null = null;
-  private provider: WebrtcProvider | null = null;
+  private provider: YPartyKitProvider | null = null;
   private destroyRef = inject(DestroyRef);
 
   readonly storyName = signal('');
@@ -38,9 +39,7 @@ export class RoomService {
     const peerId = this.doc.clientID.toString();
     this.myPeerId.set(peerId);
 
-    this.provider = new WebrtcProvider(`planning-poker-${roomCode}`, this.doc, {
-      signaling: ['wss://signaling.yjs.dev', 'wss://y-webrtc-signaling-eu.herokuapp.com'],
-    });
+    this.provider = new YPartyKitProvider(environment.partyKitHost, `planning-poker-${roomCode}`, this.doc);
 
     // Set awareness
     this.provider.awareness.setLocalState({ name: playerName, peerId });
