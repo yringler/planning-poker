@@ -10,9 +10,9 @@ import { RoomService } from '../../services/room.service';
         @for (player of room.players(); track player.peerId) {
           <div class="participant" [class.me]="player.peerId === room.myPeerId()" [class.host]="player.peerId === room.hostId()" [class.voted]="statusClass(player.peerId) === 'voted'">
             <span class="name">
-              @if (player.peerId === room.hostId()) {
+              <!-- @if (player.peerId === room.hostId()) {
                 <span class="crown" title="Host">&#128081;</span>
-              }
+              } -->
               {{ player.name }}
             </span>
             <span class="status" [class]="statusClass(player.peerId)">
