@@ -8,7 +8,7 @@ import { RoomService } from '../../services/room.service';
       <h2>Participants</h2>
       <div class="grid">
         @for (player of room.players(); track player.peerId) {
-          <div class="participant" [class.me]="player.peerId === room.myPeerId()" [class.host]="player.peerId === room.hostId()">
+          <div class="participant" [class.me]="player.peerId === room.myPeerId()" [class.host]="player.peerId === room.hostId()" [class.voted]="statusClass(player.peerId) === 'voted'">
             <span class="name">
               @if (player.peerId === room.hostId()) {
                 <span class="crown" title="Host">&#128081;</span>
@@ -51,6 +51,11 @@ import { RoomService } from '../../services/room.service';
     .participant.me {
       border-color: #93c5fd;
       background: #f0f7ff;
+    }
+
+    .participant.voted {
+      background: #dcfce7;
+      border-color: #86efac;
     }
 
     .name {
