@@ -32,6 +32,41 @@ export class RoomService {
 
   readonly isHost = computed(() => this.myPeerId() === this.hostId());
 
+  readonly resolvedHistory = computed(() => {
+    const currentPlayers = this.players();
+    const history = this.history();
+
+    const onlineNameCount = new Map<string, number>();
+    for (const p of currentPlayers) {
+      onlineNameCount.set(p.name, (onlineNameCount.get(p.name) ?? 0) + 1);
+    }
+
+    return history.map(entry => {
+      const resolvedPlayers: Record<string, string> = { ...entry.players };
+
+      for (const peerId of Object.keys(entry.votes)) {
+        if (resolvedPlayers[peerId]) continue;
+
+        for (const p of currentPlayers) {
+          if (onlineNameCount.get(p.name) !== 1) continue;
+          if (p.peerId !== peerId) continue;
+
+          const oldEntry = Object.entries(entry.players).find(([, n]) => n === p.name);
+          if (!oldEntry) continue;
+
+          const [oldPeerId] = oldEntry;
+          const oldPeerOnline = currentPlayers.some(cp => cp.peerId === oldPeerId);
+          if (oldPeerOnline) continue;
+
+          resolvedPlayers[peerId] = p.name;
+          break;
+        }
+      }
+
+      return { ...entry, players: resolvedPlayers };
+    });
+  });
+
   connect(roomCode: string, playerName: string): void {
     this.disconnect();
 

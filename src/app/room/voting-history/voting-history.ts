@@ -9,7 +9,7 @@ import { RoomService } from '../../services/room.service';
     @if (room.history().length > 0) {
       <div class="section">
         <h2>Voting History</h2>
-        @for (entry of room.history(); track entry.timestamp) {
+        @for (entry of room.resolvedHistory(); track entry.timestamp) {
           <div class="history-card">
             <div class="history-header">
               <span class="story-name">{{ entry.story || 'Untitled' }}</span>
