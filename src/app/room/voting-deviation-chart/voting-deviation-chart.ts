@@ -1,6 +1,7 @@
 import { Component, inject, computed } from '@angular/core';
 import { BaseChartDirective, provideCharts, withDefaultRegisterables } from 'ng2-charts';
 import { ChartData, ChartOptions } from 'chart.js';
+import { std, mean } from 'mathjs';
 import { RoomService } from '../../services/room.service';
 
 const COLORS = [
@@ -16,7 +17,7 @@ const COLORS = [
     @if (room.history().length > 1) {
       <div class="section">
         <h2>Voting Deviation</h2>
-        <p class="subtitle">Each player's vote deviation from round average per issue</p>
+        <p class="subtitle">Each player's vote z-score (deviation ÷ std dev) per issue</p>
         <div class="chart-container">
           <canvas baseChart
             [data]="chartData()"
@@ -66,7 +67,7 @@ export class VotingDeviationChartComponent {
             const deviation = ctx.parsed.y;
             if (deviation === null) return `${ctx.dataset.label}: no vote`;
             const sign = deviation > 0 ? '+' : '';
-            return `${ctx.dataset.label}: ${sign}${deviation.toFixed(1)} from avg`;
+            return `${ctx.dataset.label}: ${sign}${deviation.toFixed(2)}σ`;
           },
         },
       },
@@ -78,7 +79,7 @@ export class VotingDeviationChartComponent {
         ticks: { color: '#64748b', font: { size: 11 } },
       },
       y: {
-        title: { display: true, text: 'Deviation from average', color: '#64748b', font: { size: 11 } },
+        title: { display: true, text: 'Z-score (std deviations from avg)', color: '#64748b', font: { size: 11 } },
         grid: {
           color: (ctx) => (ctx.tick.value === 0 ? '#94a3b8' : '#f1f5f9'),
         },
@@ -122,14 +123,16 @@ export class VotingDeviationChartComponent {
         const vote = parseFloat(voteStr);
         if (isNaN(vote)) return null;
 
-        // Compute round average of numeric votes
+        // Compute round average and standard deviation of numeric votes
         const numericVotes = Object.values(entry.votes)
           .map((v) => parseFloat(v))
           .filter((v) => !isNaN(v));
         if (numericVotes.length === 0) return null;
 
-        const avg = numericVotes.reduce((a, b) => a + b, 0) / numericVotes.length;
-        return parseFloat((vote - avg).toFixed(2));
+        const avg = mean(numericVotes) as unknown as number;
+        const stdDev = numericVotes.length > 1 ? (std(numericVotes) as unknown as number) : 0;
+        if (stdDev === 0) return parseFloat((vote - avg).toFixed(2));
+        return parseFloat(((vote - avg) / stdDev).toFixed(2));
       });
 
       const color = COLORS[colorIdx % COLORS.length];
