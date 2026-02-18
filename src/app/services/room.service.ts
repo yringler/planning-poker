@@ -23,14 +23,11 @@ export class RoomService {
 
   readonly storyName = signal('');
   readonly phase = signal<'voting' | 'revealed'>('voting');
-  readonly hostId = signal('');
   readonly votes = signal<Record<string, string>>({});
   readonly players = signal<Player[]>([]);
   readonly history = signal<HistoryEntry[]>([]);
   readonly myPeerId = signal('');
   readonly connected = signal(false);
-
-  readonly isHost = computed(() => this.myPeerId() === this.hostId());
 
   readonly resolvedHistory = computed(() => {
     const currentPlayers = this.players();
@@ -91,16 +88,12 @@ export class RoomService {
       if (!sessionMap.has('storyName')) {
         sessionMap.set('storyName', '');
       }
-      if (!sessionMap.has('hostId')) {
-        sessionMap.set('hostId', peerId);
-      }
     });
 
     // Observe session map
     const syncSession = () => {
       this.storyName.set((sessionMap.get('storyName') as string) ?? '');
       this.phase.set((sessionMap.get('phase') as 'voting' | 'revealed') ?? 'voting');
-      this.hostId.set((sessionMap.get('hostId') as string) ?? '');
     };
     sessionMap.observe(syncSession);
     syncSession();
@@ -133,7 +126,6 @@ export class RoomService {
         }
       });
       this.players.set(playerList);
-      this.electHost(playerList);
     };
     this.provider.awareness.on('change', syncPlayers);
     syncPlayers();
@@ -158,7 +150,6 @@ export class RoomService {
     this.history.set([]);
     this.phase.set('voting');
     this.storyName.set('');
-    this.hostId.set('');
   }
 
   vote(value: string): void {
@@ -223,17 +214,5 @@ export class RoomService {
     this.doc?.getMap('session').set('storyName', name);
   }
 
-  private electHost(playerList: Player[]): void {
-    if (!this.doc || playerList.length === 0) return;
-    const sessionMap = this.doc.getMap('session');
-    const currentHostId = sessionMap.get('hostId') as string | undefined;
 
-    // Check if current host is still connected
-    const hostConnected = playerList.some(p => p.peerId === currentHostId);
-    if (!hostConnected) {
-      // Elect the peer with the lowest peerId
-      const sorted = [...playerList].sort((a, b) => a.peerId.localeCompare(b.peerId));
-      sessionMap.set('hostId', sorted[0].peerId);
-    }
-  }
 }

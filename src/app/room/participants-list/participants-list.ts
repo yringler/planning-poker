@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RoomService } from '../../services/room.service';
 
 @Component({
@@ -8,13 +8,8 @@ import { RoomService } from '../../services/room.service';
       <h2>Participants</h2>
       <div class="grid">
         @for (player of room.players(); track player.peerId) {
-          <div class="participant" [class.me]="player.peerId === room.myPeerId()" [class.host]="player.peerId === room.hostId()" [class.voted]="statusClass(player.peerId) === 'voted'">
-            <span class="name">
-              <!-- @if (player.peerId === room.hostId()) {
-                <span class="crown" title="Host">&#128081;</span>
-              } -->
-              {{ player.name }}
-            </span>
+          <div class="participant" [class.me]="player.peerId === room.myPeerId()" [class.voted]="statusClass(player.peerId) === 'voted'">
+            <span class="name">{{ player.name }}</span>
             <span class="status" [class]="statusClass(player.peerId)">
               {{ statusText(player.peerId) }}
             </span>
@@ -63,12 +58,7 @@ import { RoomService } from '../../services/room.service';
       color: #1e293b;
     }
 
-    .crown {
-      font-size: 0.9rem;
-      margin-right: 0.25rem;
-    }
-
-    .status {
+.status {
       font-size: 0.85rem;
     }
 

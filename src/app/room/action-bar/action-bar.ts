@@ -12,7 +12,7 @@ import { RoomService } from '../../services/room.service';
         <button class="btn primary" (click)="room.newRound()">New Round</button>
       } @else {
         <span class="status-text">{{ statusMessage() }}</span>
-        <div class="host-actions">
+        <div class="actions">
           <button class="btn primary" [disabled]="voteCount() === 0" (click)="room.revealVotes()">
             Reveal Votes
           </button>
@@ -52,7 +52,7 @@ import { RoomService } from '../../services/room.service';
       color: #2563eb;
     }
 
-    .host-actions {
+    .actions {
       display: flex;
       gap: 0.5rem;
     }
@@ -104,7 +104,7 @@ export class ActionBarComponent {
 
   readonly statusMessage = computed(() => {
     if (this.allVoted()) {
-      return 'All votes in! Waiting for host to reveal...';
+      return 'All votes in!';
     }
     return `Waiting for votes... (${this.voteCount()}/${this.room.players().length})`;
   });
