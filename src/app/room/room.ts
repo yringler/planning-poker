@@ -220,13 +220,14 @@ export class RoomComponent implements OnInit, OnDestroy {
   private fireConfetti(): void {
     const end = Date.now() + 3000;
     const frame = () => {
-      confetti({
-        particleCount: 8,
-        angle: 55,
-        spread: 100,
-        origin: { x: 0, y: 1 },
-        colors: ['#2563eb', '#16a34a', '#f59e0b'],
-      });
+      // bottom-left → up-right
+      confetti({ particleCount: 5, angle: 55, spread: 80, origin: { x: 0, y: 1 }, colors: ['#2563eb', '#16a34a', '#f59e0b'] });
+      // bottom-right → up-left
+      confetti({ particleCount: 5, angle: 125, spread: 80, origin: { x: 1, y: 1 }, colors: ['#2563eb', '#16a34a', '#f59e0b'] });
+      // top-left → down-right
+      confetti({ particleCount: 5, angle: 325, spread: 80, origin: { x: 0, y: 0 }, colors: ['#2563eb', '#16a34a', '#f59e0b'] });
+      // top-right → down-left
+      confetti({ particleCount: 5, angle: 235, spread: 80, origin: { x: 1, y: 0 }, colors: ['#2563eb', '#16a34a', '#f59e0b'] });
       if (Date.now() < end) requestAnimationFrame(frame);
     };
     frame();
