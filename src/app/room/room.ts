@@ -1,5 +1,5 @@
-import { Component, inject, OnInit, OnDestroy } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { Component, inject, OnInit, OnDestroy, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { RoomService } from '../services/room.service';
 import { SessionHeaderComponent } from './session-header/session-header';
@@ -19,24 +19,126 @@ import { VotingHistoryComponent } from './voting-history/voting-history';
     VotingHistoryComponent,
   ],
   template: `
-    <div class="room-container">
-      <app-session-header />
+    @if (awaitingName()) {
+      <div class="name-prompt-overlay">
+        <div class="name-prompt-card">
+          <h1>Planning Poker</h1>
+          <p class="subtitle">Enter your name to join the room</p>
+          <label for="name">Your Name</label>
+          <input
+            id="name"
+            type="text"
+            [(ngModel)]="pendingName"
+            placeholder="Enter your name"
+            (keydown.enter)="submitName()"
+            autofocus
+          />
+          <button class="btn primary" [disabled]="!pendingName.trim()" (click)="submitName()">
+            Join Room
+          </button>
+        </div>
+      </div>
+    } @else {
+      <div class="room-container">
+        <app-session-header />
 
-      <input
-        type="text"
-        class="story-input"
-        placeholder="Story name (optional)"
-        [ngModel]="room.storyName()"
-        (ngModelChange)="room.updateStoryName($event)"
-      />
+        <input
+          type="text"
+          class="story-input"
+          placeholder="Story name (optional)"
+          [ngModel]="room.storyName()"
+          (ngModelChange)="room.updateStoryName($event)"
+        />
 
-      <app-card-grid />
-      <app-participants-list />
-      <app-action-bar />
-      <app-voting-history />
-    </div>
+        <app-card-grid />
+        <app-participants-list />
+        <app-action-bar />
+        <app-voting-history />
+      </div>
+    }
   `,
   styles: `
+    .name-prompt-overlay {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    .name-prompt-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+      width: 100%;
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .name-prompt-card h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin: 0 0 0.5rem;
+    }
+
+    .subtitle {
+      color: #64748b;
+      margin: 0 0 1.5rem;
+      font-size: 1.1rem;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+      box-sizing: border-box;
+      margin-bottom: 1rem;
+    }
+
+    input:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn.primary {
+      background: #2563eb;
+      color: #fff;
+    }
+
+    .btn.primary:hover:not(:disabled) {
+      background: #1d4ed8;
+    }
+
     .room-container {
       max-width: 720px;
       margin: 0 auto;
@@ -64,16 +166,27 @@ import { VotingHistoryComponent } from './voting-history/voting-history';
 export class RoomComponent implements OnInit, OnDestroy {
   readonly room = inject(RoomService);
   private route = inject(ActivatedRoute);
-  private router = inject(Router);
+
+  awaitingName = signal(false);
+  pendingName = '';
+  private roomCode = '';
 
   ngOnInit(): void {
-    const code = this.route.snapshot.paramMap.get('code')!;
+    this.roomCode = this.route.snapshot.paramMap.get('code')!;
     const name = localStorage.getItem('pp-name');
     if (!name) {
-      this.router.navigate(['/']);
+      this.awaitingName.set(true);
       return;
     }
-    this.room.connect(code, name);
+    this.room.connect(this.roomCode, name);
+  }
+
+  submitName(): void {
+    const name = this.pendingName.trim();
+    if (!name) return;
+    localStorage.setItem('pp-name', name);
+    this.awaitingName.set(false);
+    this.room.connect(this.roomCode, name);
   }
 
   ngOnDestroy(): void {
