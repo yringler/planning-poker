@@ -8,6 +8,7 @@ import { CardGridComponent } from './card-grid/card-grid';
 import { ParticipantsListComponent } from './participants-list/participants-list';
 import { ActionBarComponent } from './action-bar/action-bar';
 import { VotingHistoryComponent } from './voting-history/voting-history';
+import { VotingDeviationChartComponent } from './voting-deviation-chart/voting-deviation-chart';
 
 @Component({
   selector: 'app-room',
@@ -18,6 +19,7 @@ import { VotingHistoryComponent } from './voting-history/voting-history';
     ParticipantsListComponent,
     ActionBarComponent,
     VotingHistoryComponent,
+    VotingDeviationChartComponent,
   ],
   template: `
     @if (awaitingName()) {
@@ -55,6 +57,7 @@ import { VotingHistoryComponent } from './voting-history/voting-history';
         <app-participants-list />
         <app-action-bar />
         <app-voting-history />
+        <app-voting-deviation-chart />
       </div>
     }
   `,
