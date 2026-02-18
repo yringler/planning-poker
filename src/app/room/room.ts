@@ -1,6 +1,7 @@
-import { Component, inject, OnInit, OnDestroy, signal } from '@angular/core';
+import { Component, inject, OnInit, OnDestroy, signal, computed, effect } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import confetti from 'canvas-confetti';
 import { RoomService } from '../services/room.service';
 import { SessionHeaderComponent } from './session-header/session-header';
 import { CardGridComponent } from './card-grid/card-grid';
@@ -170,6 +171,29 @@ export class RoomComponent implements OnInit, OnDestroy {
   awaitingName = signal(false);
   pendingName = '';
   private roomCode = '';
+  private confettiFired = false;
+
+  readonly hasConsensus = computed(() => {
+    const phase = this.room.phase();
+    const votes = this.room.votes();
+    if (phase !== 'revealed') return false;
+    const voteValues = Object.values(votes);
+    if (voteValues.length < 2) return false;
+    return voteValues.every(v => v === voteValues[0]);
+  });
+
+  constructor() {
+    effect(() => {
+      if (this.hasConsensus()) {
+        if (!this.confettiFired) {
+          this.confettiFired = true;
+          this.fireConfetti();
+        }
+      } else {
+        this.confettiFired = false;
+      }
+    });
+  }
 
   ngOnInit(): void {
     this.roomCode = this.route.snapshot.paramMap.get('code')!;
@@ -191,5 +215,20 @@ export class RoomComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.room.disconnect();
+  }
+
+  private fireConfetti(): void {
+    const end = Date.now() + 3000;
+    const frame = () => {
+      confetti({
+        particleCount: 8,
+        angle: 55,
+        spread: 100,
+        origin: { x: 0, y: 1 },
+        colors: ['#2563eb', '#16a34a', '#f59e0b'],
+      });
+      if (Date.now() < end) requestAnimationFrame(frame);
+    };
+    frame();
   }
 }
