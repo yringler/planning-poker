@@ -9,19 +9,15 @@ import { RoomService } from '../../services/room.service';
         <div class="result">
           <span class="average">{{ averageText() }}</span>
         </div>
-        @if (room.isHost()) {
-          <button class="btn primary" (click)="room.newRound()">New Round</button>
-        }
+        <button class="btn primary" (click)="room.newRound()">New Round</button>
       } @else {
         <span class="status-text">{{ statusMessage() }}</span>
-        @if (room.isHost()) {
-          <div class="host-actions">
-            <button class="btn primary" [disabled]="voteCount() === 0" (click)="room.revealVotes()">
-              Reveal Votes
-            </button>
-            <button class="btn secondary" (click)="room.resetRound()">Reset</button>
-          </div>
-        }
+        <div class="host-actions">
+          <button class="btn primary" [disabled]="voteCount() === 0" (click)="room.revealVotes()">
+            Reveal Votes
+          </button>
+          <button class="btn secondary" (click)="room.resetRound()">Reset</button>
+        </div>
       }
     </div>
   `,
