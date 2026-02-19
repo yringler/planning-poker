@@ -161,26 +161,11 @@ export class RoomService {
   }
 
   revealVotes(): void {
-    this.doc?.getMap('session').set('phase', 'revealed');
-  }
-
-  resetRound(): void {
-    if (!this.doc) return;
-    this.doc.transact(() => {
-      const votesMap = this.doc!.getMap('votes');
-      const keys = Array.from(votesMap.keys());
-      keys.forEach(k => votesMap.delete(k));
-      this.doc!.getMap('session').set('phase', 'voting');
-    });
-  }
-
-  newRound(): void {
     if (!this.doc) return;
     const sessionMap = this.doc.getMap('session');
     const votesMap = this.doc.getMap('votes');
     const historyArray = this.doc.getArray<HistoryEntry>('history');
 
-    // Build player name map from current awareness
     const playerNames: Record<string, string> = {};
     this.players().forEach(p => {
       playerNames[p.peerId] = p.name;
@@ -192,14 +177,37 @@ export class RoomService {
     });
 
     this.doc.transact(() => {
-      // Save to history
       historyArray.insert(0, [{
         story: (sessionMap.get('storyName') as string) || '',
         timestamp: Date.now(),
         votes: currentVotes,
         players: playerNames,
       }]);
+      sessionMap.set('phase', 'revealed');
+    });
+  }
 
+  resetRound(): void {
+    if (!this.doc) return;
+    const historyArray = this.doc.getArray<HistoryEntry>('history');
+    this.doc.transact(() => {
+      const votesMap = this.doc!.getMap('votes');
+      const keys = Array.from(votesMap.keys());
+      keys.forEach(k => votesMap.delete(k));
+      this.doc!.getMap('session').set('phase', 'voting');
+      // Remove the history entry that was added on reveal
+      if (historyArray.length > 0) {
+        historyArray.delete(0, 1);
+      }
+    });
+  }
+
+  newRound(): void {
+    if (!this.doc) return;
+    const sessionMap = this.doc.getMap('session');
+    const votesMap = this.doc.getMap('votes');
+
+    this.doc.transact(() => {
       // Clear votes
       const keys = Array.from(votesMap.keys());
       keys.forEach(k => votesMap.delete(k));
