@@ -1,4 +1,4 @@
-import { Component, inject, computed } from '@angular/core';
+import { Component, inject, computed, signal } from '@angular/core';
 import { BaseChartDirective, provideCharts, withDefaultRegisterables } from 'ng2-charts';
 import { ChartData, ChartOptions } from 'chart.js';
 import { RoomService } from '../../services/room.service';
@@ -17,6 +17,10 @@ const COLORS = [
       <div class="section">
         <h2>Voting Deviation</h2>
         <p class="subtitle">Each player's vote z-score (deviation ÷ std dev) per issue</p>
+        <div class="controls">
+          <label><input type="checkbox" [checked]="showZScores()" (change)="toggleZScores($any($event.target).checked)"> Z-scores</label>
+          <label><input type="checkbox" [checked]="showAvgAbsZ()" (change)="toggleAvgAbsZ($any($event.target).checked)"> Avg |z|</label>
+        </div>
         <div class="chart-container">
           <canvas baseChart
             [data]="chartData()"
@@ -41,6 +45,21 @@ const COLORS = [
       margin: 0 0 1rem;
     }
 
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+
+      label {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.8rem;
+        color: #64748b;
+        cursor: pointer;
+      }
+    }
+
     .chart-container {
       background: #fff;
       border-radius: 12px;
@@ -51,6 +70,12 @@ const COLORS = [
 })
 export class VotingDeviationChartComponent {
   readonly room = inject(RoomService);
+
+  showZScores = signal(true);
+  showAvgAbsZ = signal(true);
+
+  toggleZScores(checked: boolean) { this.showZScores.set(checked); }
+  toggleAvgAbsZ(checked: boolean) { this.showAvgAbsZ.set(checked); }
 
   readonly chartOptions: ChartOptions<'line'> = {
     responsive: true,
@@ -63,10 +88,14 @@ export class VotingDeviationChartComponent {
       tooltip: {
         callbacks: {
           label: (ctx) => {
-            const deviation = ctx.parsed.y;
-            if (deviation === null) return `${ctx.dataset.label}: no vote`;
-            const sign = deviation > 0 ? '+' : '';
-            return `${ctx.dataset.label}: ${sign}${deviation.toFixed(2)}σ`;
+            const value = ctx.parsed.y;
+            const label = ctx.dataset.label ?? '';
+            if (value === null) return `${label}: no vote`;
+            if (label.endsWith('(avg |z|)')) {
+              return `${label}: ${value.toFixed(2)}σ`;
+            }
+            const sign = value > 0 ? '+' : '';
+            return `${label}: ${sign}${value.toFixed(2)}σ`;
           },
         },
       },
@@ -110,8 +139,8 @@ export class VotingDeviationChartComponent {
     const players = Array.from(playerNames);
     const labels = history.map((_, i) => String(i + 1));
 
-    const datasets = players.map((playerName, colorIdx) => {
-      const data: (number | null)[] = history.map((entry) => {
+    const datasets = players.flatMap((playerName, colorIdx) => {
+      const zScores: (number | null)[] = history.map((entry) => {
         // Find this player's vote in this entry
         const peerId = Object.keys(entry.players).find(
           (id) => entry.players[id] === playerName,
@@ -136,18 +165,48 @@ export class VotingDeviationChartComponent {
         return parseFloat(((vote - avg) / stdDev).toFixed(2));
       });
 
+      // Cumulative mean absolute z-score up to each issue
+      const cumulativeMeanAbsZ: (number | null)[] = [];
+      let runningSum = 0;
+      let runningCount = 0;
+      for (const z of zScores) {
+        if (z !== null) {
+          runningSum += Math.abs(z);
+          runningCount++;
+        }
+        cumulativeMeanAbsZ.push(runningCount > 0 ? parseFloat((runningSum / runningCount).toFixed(2)) : null);
+      }
+
       const color = COLORS[colorIdx % COLORS.length];
-      return {
-        label: playerName,
-        data,
-        borderColor: color,
-        backgroundColor: color + '22',
-        pointBackgroundColor: color,
-        pointRadius: 5,
-        pointHoverRadius: 7,
-        tension: 0.3,
-        fill: false,
-      };
+      const result = [];
+      if (this.showZScores()) {
+        result.push({
+          label: playerName,
+          data: zScores,
+          borderColor: color,
+          backgroundColor: color + '22',
+          pointBackgroundColor: color,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          tension: 0.3,
+          fill: false,
+        });
+      }
+      if (this.showAvgAbsZ()) {
+        result.push({
+          label: `${playerName} (avg |z|)`,
+          data: cumulativeMeanAbsZ,
+          borderColor: color,
+          backgroundColor: 'transparent',
+          pointBackgroundColor: color,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          tension: 0.3,
+          fill: false,
+          borderDash: [5, 5],
+        });
+      }
+      return result;
     });
 
     return { labels, datasets };
