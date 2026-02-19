@@ -9,7 +9,10 @@ import { RoomService } from '../../services/room.service';
         <div class="result">
           <span class="average">{{ averageText() }}</span>
         </div>
-        <button class="btn primary" (click)="room.newRound()">New Round</button>
+        <div class="actions">
+          <button class="btn primary" (click)="room.newRound()">New Round</button>
+          <button class="btn secondary" (click)="room.resetRound()">Reset</button>
+        </div>
       } @else {
         <span class="status-text">{{ statusMessage() }}</span>
         <div class="actions">
