@@ -1,7 +1,6 @@
 import { Component, inject, computed } from '@angular/core';
 import { BaseChartDirective, provideCharts, withDefaultRegisterables } from 'ng2-charts';
 import { ChartData, ChartOptions } from 'chart.js';
-import { std, mean } from 'mathjs';
 import { RoomService } from '../../services/room.service';
 
 const COLORS = [
@@ -129,9 +128,11 @@ export class VotingDeviationChartComponent {
           .filter((v) => !isNaN(v));
         if (numericVotes.length === 0) return null;
 
-        const avg = mean(numericVotes) as unknown as number;
-        const stdDev = numericVotes.length > 1 ? (std(numericVotes) as unknown as number) : 0;
-        if (stdDev === 0) return parseFloat((vote - avg).toFixed(2));
+        const avg = numericVotes.reduce((a, b) => a + b, 0) / numericVotes.length;
+        const stdDev = Math.sqrt(
+          numericVotes.reduce((a, b) => a + (b - avg) ** 2, 0) / numericVotes.length
+        );
+        if (stdDev === 0) return 0;
         return parseFloat(((vote - avg) / stdDev).toFixed(2));
       });
 
