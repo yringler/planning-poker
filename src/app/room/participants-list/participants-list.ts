@@ -22,8 +22,7 @@ import { RoomService } from '../../services/room.service';
                 <wa-tag variant="neutral" appearance="outlined" size="small">Waiting…</wa-tag>
               } @else if (statusClass(player.peerId) === 'voted') {
                 <wa-tag variant="success" appearance="filled" size="small">
-                  <wa-icon slot="start" name="check"></wa-icon>
-                  Voted
+                  <wa-icon name="check"></wa-icon> Voted
                 </wa-tag>
               } @else {
                 <wa-tag variant="brand" appearance="filled" size="small" style="font-size: 1rem; font-weight: 700">
