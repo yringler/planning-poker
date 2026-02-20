@@ -33,7 +33,6 @@ import { RoomService } from '../../services/room.service';
             <wa-button
               variant="brand"
               appearance="filled"
-              [attr.disabled]="voteCount() === 0 ? '' : null"
               (click)="room.revealVotes()"
             >
               <wa-icon slot="start" name="eye"></wa-icon>
