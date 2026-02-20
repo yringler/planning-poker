@@ -44,3 +44,5 @@ __screenshots__/
 Thumbs.db
 .partykit
 .claude/*local*
+.claude/skills/webawesome
+.agents/skills/webawesome
