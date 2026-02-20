@@ -1,17 +1,35 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { RoomService } from '../../services/room.service';
 
 @Component({
   selector: 'app-participants-list',
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
-    <div class="section">
+    <div>
       <h2>Participants</h2>
-      <div class="grid">
+      <div class="wa-grid wa-gap-xs" style="--min-column-size: 200px">
         @for (player of room.players(); track player.peerId) {
-          <div class="participant" [class.me]="player.peerId === room.myPeerId()" [class.voted]="statusClass(player.peerId) === 'voted'">
+          <div
+            class="participant"
+            [class.me]="player.peerId === room.myPeerId()"
+            [class.voted]="statusClass(player.peerId) === 'voted'"
+            [class.revealed]="statusClass(player.peerId) === 'revealed'"
+          >
+            <wa-avatar [initials]="initials(player.name)" shape="rounded" style="--size: 2rem"></wa-avatar>
             <span class="name">{{ player.name }}</span>
-            <span class="status" [class]="statusClass(player.peerId)">
-              {{ statusText(player.peerId) }}
+            <span class="status-badge">
+              @if (statusClass(player.peerId) === 'waiting') {
+                <wa-tag variant="neutral" appearance="outlined" size="small">Waiting…</wa-tag>
+              } @else if (statusClass(player.peerId) === 'voted') {
+                <wa-tag variant="success" appearance="filled" size="small">
+                  <wa-icon slot="start" name="check"></wa-icon>
+                  Voted
+                </wa-tag>
+              } @else {
+                <wa-tag variant="brand" appearance="filled" size="small" style="font-size: 1rem; font-weight: 700">
+                  {{ statusText(player.peerId) }}
+                </wa-tag>
+              }
             </span>
           </div>
         }
@@ -20,82 +38,73 @@ import { RoomService } from '../../services/room.service';
   `,
   styles: `
     h2 {
-      font-size: 1rem;
+      font-size: 0.85rem;
       font-weight: 600;
-      color: #475569;
-      margin: 0 0 0.75rem;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 0.5rem;
-      margin-bottom: 1.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--wa-color-neutral-on-quiet);
+      margin: 0 0 var(--wa-space-s);
     }
 
     .participant {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      padding: 0.75rem 1rem;
-      background: #fff;
-      border-radius: 8px;
-      border: 1px solid #e2e8f0;
+      gap: var(--wa-space-s);
+      padding: var(--wa-space-s) var(--wa-space-m);
+      background: var(--wa-color-surface-raised);
+      border-radius: var(--wa-border-radius-m);
+      border: 1px solid var(--wa-color-neutral-stroke-quiet);
+      transition: border-color 0.15s, background 0.15s;
     }
 
     .participant.me {
-      border-color: #93c5fd;
-      background: #f0f7ff;
+      border-color: var(--wa-color-brand-stroke-loud);
+      background: var(--wa-color-brand-fill-quiet);
     }
 
     .participant.voted {
-      background: #dcfce7;
-      border-color: #86efac;
+      border-color: var(--wa-color-success-stroke-loud);
+      background: var(--wa-color-success-fill-quiet);
+    }
+
+    .participant.revealed {
+      border-color: var(--wa-color-brand-stroke-loud);
     }
 
     .name {
+      flex: 1;
       font-weight: 500;
-      color: #1e293b;
-    }
-
-.status {
-      font-size: 0.85rem;
-    }
-
-    .status.waiting {
-      color: #94a3b8;
-      font-style: italic;
-    }
-
-    .status.voted {
-      color: #16a34a;
-      font-weight: 500;
-    }
-
-    .status.revealed {
-      color: #2563eb;
-      font-weight: 700;
-      font-size: 1.1rem;
+      color: var(--wa-color-neutral-on-default);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
   `,
 })
 export class ParticipantsListComponent {
   readonly room = inject(RoomService);
 
+  initials(name: string): string {
+    return name
+      .split(' ')
+      .map((w) => w[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+  }
+
   statusText(peerId: string): string {
     const votes = this.room.votes();
     const phase = this.room.phase();
-
     if (phase === 'revealed') {
-      return votes[peerId] ?? 'No vote';
+      return votes[peerId] ?? '–';
     }
-    return votes[peerId] != null ? 'Voted \u2713' : 'Waiting...';
+    return votes[peerId] != null ? 'Voted ✓' : 'Waiting…';
   }
 
   statusClass(peerId: string): string {
     const votes = this.room.votes();
     const phase = this.room.phase();
-
     if (phase === 'revealed') return 'revealed';
     return votes[peerId] != null ? 'voted' : 'waiting';
   }

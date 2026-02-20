@@ -1,55 +1,62 @@
-import { Component, signal } from '@angular/core';
+import { Component, CUSTOM_ELEMENTS_SCHEMA, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-landing',
   imports: [FormsModule],
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
     <div class="landing">
-      <h1>Planning Poker</h1>
-      <p class="subtitle">Real-time estimation for agile teams</p>
+      <div class="wa-stack wa-gap-xs" style="align-items: center; margin-bottom: var(--wa-space-l)">
+        <h1>Planning Poker</h1>
+        <p class="subtitle">Real-time estimation for agile teams</p>
+      </div>
 
-      <div class="card">
-        <label for="name">Your Name</label>
-        <input
-          id="name"
-          type="text"
-          [(ngModel)]="name"
-          placeholder="Enter your name"
-          (keydown.enter)="name() ? null : undefined"
-        />
+      <wa-card style="width: 100%; max-width: 420px">
+        <div class="wa-stack wa-gap-m">
+          <wa-input
+            label="Your Name"
+            placeholder="Enter your name"
+            [value]="name()"
+            (input)="name.set($any($event.target).value)"
+            (keydown.enter)="name().trim() && createSession()"
+            autofocus
+          ></wa-input>
 
-        <div class="actions">
-          <div class="create-section">
-            <button class="btn primary" [disabled]="!name().trim()" (click)="createSession()">
-              Create Session
-            </button>
-          </div>
+          <wa-button
+            variant="brand"
+            appearance="filled"
+            style="width: 100%"
+            [attr.disabled]="!name().trim() ? '' : null"
+            (click)="createSession()"
+          >
+            <wa-icon slot="start" name="plus"></wa-icon>
+            Create Session
+          </wa-button>
 
-          <div class="divider">
-            <span>or</span>
-          </div>
+          <wa-divider></wa-divider>
 
-          <div class="join-section">
-            <input
-              type="text"
-              [(ngModel)]="roomCode"
+          <div class="wa-cluster wa-gap-s">
+            <wa-input
               placeholder="Room code"
-              class="room-code-input"
-              maxlength="6"
+              [value]="roomCode()"
+              (input)="roomCode.set($any($event.target).value.toUpperCase())"
               (keydown.enter)="joinSession()"
-            />
-            <button
-              class="btn secondary"
-              [disabled]="!name().trim() || !roomCode().trim()"
+              maxlength="6"
+              style="flex: 1; text-transform: uppercase"
+            ></wa-input>
+            <wa-button
+              variant="neutral"
+              appearance="outlined"
+              [attr.disabled]="!name().trim() || !roomCode().trim() ? '' : null"
               (click)="joinSession()"
             >
-              Join Session
-            </button>
+              Join
+            </wa-button>
           </div>
         </div>
-      </div>
+      </wa-card>
     </div>
   `,
   styles: `
@@ -59,126 +66,24 @@ import { FormsModule } from '@angular/forms';
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      padding: 2rem;
+      padding: var(--wa-space-2xl);
     }
 
     h1 {
       font-size: 2.5rem;
       font-weight: 700;
-      color: #1e293b;
-      margin: 0 0 0.5rem;
+      margin: 0;
+      color: var(--wa-color-brand-fill-loud);
     }
 
     .subtitle {
-      color: #64748b;
-      margin: 0 0 2rem;
+      color: var(--wa-color-neutral-on-quiet);
+      margin: 0;
       font-size: 1.1rem;
     }
 
-    .card {
-      background: #fff;
-      border-radius: 12px;
-      padding: 2rem;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
-      width: 100%;
-      max-width: 400px;
-    }
-
-    label {
-      display: block;
-      font-weight: 600;
-      color: #334155;
-      margin-bottom: 0.5rem;
-      font-size: 0.9rem;
-    }
-
-    input {
-      width: 100%;
-      padding: 0.75rem 1rem;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      font-size: 1rem;
-      outline: none;
-      transition: border-color 0.2s;
-      box-sizing: border-box;
-    }
-
-    input:focus {
-      border-color: #2563eb;
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-    }
-
-    .actions {
-      margin-top: 1.5rem;
-    }
-
-    .btn {
-      width: 100%;
-      padding: 0.75rem 1.5rem;
-      border: none;
-      border-radius: 8px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s, opacity 0.2s;
-    }
-
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .btn.primary {
-      background: #2563eb;
-      color: #fff;
-    }
-
-    .btn.primary:hover:not(:disabled) {
-      background: #1d4ed8;
-    }
-
-    .btn.secondary {
-      background: #f1f5f9;
-      color: #334155;
-    }
-
-    .btn.secondary:hover:not(:disabled) {
-      background: #e2e8f0;
-    }
-
-    .divider {
-      display: flex;
-      align-items: center;
-      margin: 1.25rem 0;
-      color: #94a3b8;
-      font-size: 0.875rem;
-    }
-
-    .divider::before,
-    .divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: #e2e8f0;
-    }
-
-    .divider span {
-      padding: 0 1rem;
-    }
-
-    .join-section {
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    .room-code-input {
-      text-transform: uppercase;
-      flex: 1;
-    }
-
-    .join-section .btn {
-      width: auto;
-      white-space: nowrap;
+    wa-card {
+      --spacing: var(--wa-space-xl);
     }
   `,
 })

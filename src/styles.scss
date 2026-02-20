@@ -1,11 +1,13 @@
+// Apply the Awesome theme with bright palette
+// Add to html element: class="wa-theme-awesome wa-palette-bright"
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background: #f0f4f8;
-  color: #1e293b;
+  background: var(--wa-color-surface-lowered);
+  color: var(--wa-color-neutral-on-quiet);
   -webkit-font-smoothing: antialiased;
 }

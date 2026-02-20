@@ -1,19 +1,20 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { RoomService } from '../../services/room.service';
 
 @Component({
   selector: 'app-card-grid',
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
     <div class="card-grid" [class.disabled]="room.phase() === 'revealed'">
       @for (card of cards; track card) {
-        <button
-          class="card"
-          [class.selected]="selectedCard() === card"
-          [disabled]="room.phase() === 'revealed'"
+        <wa-button
+          class="poker-card"
+          appearance="outlined"
+          [attr.variant]="selectedCard() === card ? 'brand' : 'neutral'"
+          [attr.data-selected]="selectedCard() === card ? '' : null"
+          [attr.disabled]="room.phase() === 'revealed' ? '' : null"
           (click)="selectCard(card)"
-        >
-          {{ card }}
-        </button>
+        >{{ card }}</wa-button>
       }
     </div>
   `,
@@ -21,8 +22,7 @@ import { RoomService } from '../../services/room.service';
     .card-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
-      gap: 0.75rem;
-      margin-bottom: 1.5rem;
+      gap: var(--wa-space-s);
     }
 
     .card-grid.disabled {
@@ -30,28 +30,21 @@ import { RoomService } from '../../services/room.service';
       pointer-events: none;
     }
 
-    .card {
-      padding: 1rem 0.5rem;
-      border: 2px solid #e2e8f0;
-      border-radius: 12px;
-      background: #f8fafc;
+    .poker-card {
+      aspect-ratio: 2/3;
       font-size: 1.25rem;
-      font-weight: 600;
-      color: #334155;
-      cursor: pointer;
-      transition: all 0.15s;
+      font-weight: 700;
     }
 
-    .card:hover:not(:disabled) {
-      border-color: #93c5fd;
-      background: #eff6ff;
+    .poker-card[data-selected] {
+      box-shadow: var(--wa-shadow-m);
+      transform: translateY(-4px);
     }
 
-    .card.selected {
-      border-color: #2563eb;
-      background: #dbeafe;
-      color: #1d4ed8;
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    .poker-card::part(base) {
+      height: 100%;
+      border-radius: var(--wa-border-radius-l);
+      border-width: 2px;
     }
   `,
 })

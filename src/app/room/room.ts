@@ -1,4 +1,13 @@
-import { Component, inject, OnInit, OnDestroy, signal, computed, effect } from '@angular/core';
+import {
+  Component,
+  CUSTOM_ELEMENTS_SCHEMA,
+  inject,
+  OnInit,
+  OnDestroy,
+  signal,
+  computed,
+  effect,
+} from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import confetti from 'canvas-confetti';
@@ -21,37 +30,48 @@ import { VotingDeviationChartComponent } from './voting-deviation-chart/voting-d
     VotingHistoryComponent,
     VotingDeviationChartComponent,
   ],
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
     @if (awaitingName()) {
       <div class="name-prompt-overlay">
-        <div class="name-prompt-card">
-          <h1>Planning Poker</h1>
-          <p class="subtitle">Enter your name to join the room</p>
-          <label for="name">Your Name</label>
-          <input
-            id="name"
-            type="text"
-            [(ngModel)]="pendingName"
-            placeholder="Enter your name"
-            (keydown.enter)="submitName()"
-            autofocus
-          />
-          <button class="btn primary" [disabled]="!pendingName.trim()" (click)="submitName()">
-            Join Room
-          </button>
-        </div>
+        <wa-card style="width: 100%; max-width: 420px">
+          <div class="wa-stack wa-gap-m">
+            <div class="wa-stack wa-gap-xs">
+              <h1>Planning Poker</h1>
+              <p class="subtitle">Enter your name to join the room</p>
+            </div>
+            <wa-input
+              label="Your Name"
+              placeholder="Enter your name"
+              [value]="pendingName"
+              (input)="pendingName = $any($event.target).value"
+              (keydown.enter)="submitName()"
+              autofocus
+            ></wa-input>
+            <wa-button
+              variant="brand"
+              appearance="filled"
+              style="width: 100%"
+              [attr.disabled]="!pendingName.trim() ? '' : null"
+              (click)="submitName()"
+            >
+              Join Room
+            </wa-button>
+          </div>
+        </wa-card>
       </div>
     } @else {
-      <div class="room-container">
+      <div class="room-container wa-stack wa-gap-l">
         <app-session-header />
 
-        <input
-          type="text"
-          class="story-input"
+        <wa-input
           placeholder="Story name (optional)"
-          [ngModel]="room.storyName()"
-          (ngModelChange)="room.updateStoryName($event)"
-        />
+          [value]="room.storyName()"
+          (input)="room.updateStoryName($any($event.target).value)"
+          style="width: 100%"
+        >
+          <wa-icon slot="start" name="book"></wa-icon>
+        </wa-input>
 
         <app-card-grid />
         <app-participants-list />
@@ -67,103 +87,30 @@ import { VotingDeviationChartComponent } from './voting-deviation-chart/voting-d
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      padding: 2rem;
+      padding: var(--wa-space-2xl);
     }
 
-    .name-prompt-card {
-      background: #fff;
-      border-radius: 12px;
-      padding: 2rem;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
-      width: 100%;
-      max-width: 400px;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .name-prompt-card h1 {
+    h1 {
       font-size: 2.5rem;
       font-weight: 700;
-      color: #1e293b;
-      margin: 0 0 0.5rem;
+      margin: 0;
+      color: var(--wa-color-brand-fill-loud);
     }
 
     .subtitle {
-      color: #64748b;
-      margin: 0 0 1.5rem;
+      color: var(--wa-color-neutral-on-quiet);
+      margin: 0;
       font-size: 1.1rem;
     }
 
-    label {
-      display: block;
-      font-weight: 600;
-      color: #334155;
-      margin-bottom: 0.5rem;
-      font-size: 0.9rem;
-    }
-
-    input {
-      width: 100%;
-      padding: 0.75rem 1rem;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      font-size: 1rem;
-      outline: none;
-      transition: border-color 0.2s;
-      box-sizing: border-box;
-      margin-bottom: 1rem;
-    }
-
-    input:focus {
-      border-color: #2563eb;
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-    }
-
-    .btn {
-      padding: 0.75rem 1.5rem;
-      border: none;
-      border-radius: 8px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s, opacity 0.2s;
-    }
-
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .btn.primary {
-      background: #2563eb;
-      color: #fff;
-    }
-
-    .btn.primary:hover:not(:disabled) {
-      background: #1d4ed8;
+    wa-card {
+      --spacing: var(--wa-space-xl);
     }
 
     .room-container {
       max-width: 720px;
       margin: 0 auto;
-      padding: 2rem 1.5rem;
-    }
-
-    .story-input {
-      width: 100%;
-      padding: 0.75rem 1rem;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      font-size: 1rem;
-      outline: none;
-      margin-bottom: 1.5rem;
-      box-sizing: border-box;
-      transition: border-color 0.2s;
-    }
-
-    .story-input:focus {
-      border-color: #2563eb;
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      padding: var(--wa-space-2xl) var(--wa-space-xl);
     }
   `,
 })
@@ -182,7 +129,7 @@ export class RoomComponent implements OnInit, OnDestroy {
     if (phase !== 'revealed') return false;
     const voteValues = Object.values(votes);
     if (voteValues.length < 2) return false;
-    return voteValues.every(v => v === voteValues[0]);
+    return voteValues.every((v) => v === voteValues[0]);
   });
 
   constructor() {
@@ -223,14 +170,34 @@ export class RoomComponent implements OnInit, OnDestroy {
   private fireConfetti(): void {
     const end = Date.now() + 3000;
     const frame = () => {
-      // bottom-left → up-right
-      confetti({ particleCount: 5, angle: 55, spread: 80, origin: { x: 0, y: 1 }, colors: ['#2563eb', '#16a34a', '#f59e0b'] });
-      // bottom-right → up-left
-      confetti({ particleCount: 5, angle: 125, spread: 80, origin: { x: 1, y: 1 }, colors: ['#2563eb', '#16a34a', '#f59e0b'] });
-      // top-left → down-right
-      confetti({ particleCount: 5, angle: 325, spread: 80, origin: { x: 0, y: 0 }, colors: ['#2563eb', '#16a34a', '#f59e0b'] });
-      // top-right → down-left
-      confetti({ particleCount: 5, angle: 235, spread: 80, origin: { x: 1, y: 0 }, colors: ['#2563eb', '#16a34a', '#f59e0b'] });
+      confetti({
+        particleCount: 5,
+        angle: 55,
+        spread: 80,
+        origin: { x: 0, y: 1 },
+        colors: ['#2563eb', '#16a34a', '#f59e0b'],
+      });
+      confetti({
+        particleCount: 5,
+        angle: 125,
+        spread: 80,
+        origin: { x: 1, y: 1 },
+        colors: ['#2563eb', '#16a34a', '#f59e0b'],
+      });
+      confetti({
+        particleCount: 5,
+        angle: 325,
+        spread: 80,
+        origin: { x: 0, y: 0 },
+        colors: ['#2563eb', '#16a34a', '#f59e0b'],
+      });
+      confetti({
+        particleCount: 5,
+        angle: 235,
+        spread: 80,
+        origin: { x: 1, y: 0 },
+        colors: ['#2563eb', '#16a34a', '#f59e0b'],
+      });
       if (Date.now() < end) requestAnimationFrame(frame);
     };
     frame();

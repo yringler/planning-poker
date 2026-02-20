@@ -1,96 +1,79 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { RoomService } from '../../services/room.service';
 
 @Component({
   selector: 'app-action-bar',
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
-    <div class="action-bar">
-      @if (room.phase() === 'revealed') {
-        <div class="result">
-          <span class="average">{{ averageText() }}</span>
-        </div>
-        <div class="actions">
-          <button class="btn primary" (click)="room.newRound()">New Round</button>
-          <button class="btn secondary" (click)="room.resetRound()">Reset</button>
-        </div>
-      } @else {
-        <span class="status-text">{{ statusMessage() }}</span>
-        <div class="actions">
-          <button class="btn primary" [disabled]="voteCount() === 0" (click)="room.revealVotes()">
-            Reveal Votes
-          </button>
-          <button class="btn secondary" (click)="room.resetRound()">Reset</button>
-        </div>
-      }
-    </div>
+    <wa-card appearance="filled">
+      <div class="wa-flank" style="align-items: center; flex-wrap: wrap; gap: var(--wa-space-s)">
+        @if (room.phase() === 'revealed') {
+          <div class="average-display">
+            <wa-icon name="chart-bar"></wa-icon>
+            <span class="average-value">{{ averageText() }}</span>
+          </div>
+          <div slot="end" class="wa-cluster wa-gap-s">
+            <wa-button variant="brand" appearance="filled" (click)="room.newRound()">
+              <wa-icon slot="start" name="plus"></wa-icon>
+              New Round
+            </wa-button>
+            <wa-button variant="neutral" appearance="outlined" (click)="room.resetRound()">
+              <wa-icon slot="start" name="arrow-rotate-left"></wa-icon>
+              Reset
+            </wa-button>
+          </div>
+        } @else {
+          <span class="status-text">
+            @if (allVoted()) {
+              <wa-icon name="circle-check" style="color: var(--wa-color-success-fill-loud)"></wa-icon>
+            } @else {
+              <wa-spinner style="font-size: 1rem"></wa-spinner>
+            }
+            {{ statusMessage() }}
+          </span>
+          <div slot="end" class="wa-cluster wa-gap-s">
+            <wa-button
+              variant="brand"
+              appearance="filled"
+              [attr.disabled]="voteCount() === 0 ? '' : null"
+              (click)="room.revealVotes()"
+            >
+              <wa-icon slot="start" name="eye"></wa-icon>
+              Reveal Votes
+            </wa-button>
+            <wa-button variant="neutral" appearance="outlined" (click)="room.resetRound()">
+              <wa-icon slot="start" name="arrow-rotate-left"></wa-icon>
+              Reset
+            </wa-button>
+          </div>
+        }
+      </div>
+    </wa-card>
   `,
   styles: `
-    .action-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 1rem 1.25rem;
-      background: #f8fafc;
-      border-radius: 12px;
-      border: 1px solid #e2e8f0;
-      margin-bottom: 1.5rem;
-      flex-wrap: wrap;
-      gap: 0.75rem;
+    wa-card {
+      --spacing: var(--wa-space-m) var(--wa-space-l);
     }
 
     .status-text {
-      color: #64748b;
+      display: flex;
+      align-items: center;
+      gap: var(--wa-space-xs);
+      color: var(--wa-color-neutral-on-quiet);
       font-size: 0.95rem;
     }
 
-    .result {
+    .average-display {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: var(--wa-space-xs);
+      color: var(--wa-color-neutral-on-quiet);
     }
 
-    .average {
+    .average-value {
       font-size: 1.25rem;
       font-weight: 700;
-      color: #2563eb;
-    }
-
-    .actions {
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    .btn {
-      padding: 0.6rem 1.25rem;
-      border: none;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s, opacity 0.2s;
-    }
-
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .btn.primary {
-      background: #2563eb;
-      color: #fff;
-    }
-
-    .btn.primary:hover:not(:disabled) {
-      background: #1d4ed8;
-    }
-
-    .btn.secondary {
-      background: #e2e8f0;
-      color: #475569;
-    }
-
-    .btn.secondary:hover {
-      background: #cbd5e1;
+      color: var(--wa-color-brand-fill-loud);
     }
   `,
 })
@@ -102,21 +85,21 @@ export class ActionBarComponent {
   readonly allVoted = computed(() => {
     const players = this.room.players();
     const votes = this.room.votes();
-    return players.length > 0 && players.every(p => votes[p.peerId] != null);
+    return players.length > 0 && players.every((p) => votes[p.peerId] != null);
   });
 
   readonly statusMessage = computed(() => {
     if (this.allVoted()) {
       return 'All votes in!';
     }
-    return `Waiting for votes... (${this.voteCount()}/${this.room.players().length})`;
+    return `Waiting for votes… (${this.voteCount()}/${this.room.players().length})`;
   });
 
   readonly averageText = computed(() => {
     const votes = this.room.votes();
     const numericVotes = Object.values(votes)
-      .map(v => parseFloat(v))
-      .filter(v => !isNaN(v));
+      .map((v) => parseFloat(v))
+      .filter((v) => !isNaN(v));
     if (numericVotes.length === 0) return 'No numeric votes';
     const avg = numericVotes.reduce((a, b) => a + b, 0) / numericVotes.length;
     return `Avg: ${avg % 1 === 0 ? avg.toString() : avg.toFixed(1)}`;

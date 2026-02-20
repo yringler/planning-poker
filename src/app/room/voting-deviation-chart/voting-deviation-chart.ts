@@ -1,4 +1,4 @@
-import { Component, inject, computed, signal } from '@angular/core';
+import { Component, inject, computed, signal, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { BaseChartDirective, provideCharts, withDefaultRegisterables } from 'ng2-charts';
 import { ChartData, ChartOptions } from 'chart.js';
 import { RoomService } from '../../services/room.service';
@@ -12,60 +12,41 @@ const COLORS = [
   selector: 'app-voting-deviation-chart',
   imports: [BaseChartDirective],
   providers: [provideCharts(withDefaultRegisterables())],
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
     @if (room.history().length > 1) {
-      <div class="section">
-        <h2>Voting Deviation</h2>
-        <p class="subtitle">Each player's vote z-score (deviation ÷ std dev) per issue</p>
-        <div class="controls">
-          <label><input type="checkbox" [checked]="showZScores()" (change)="toggleZScores($any($event.target).checked)"> Z-scores</label>
-          <label><input type="checkbox" [checked]="showAvgAbsZ()" (change)="toggleAvgAbsZ($any($event.target).checked)"> Avg |z|</label>
+      <div class="wa-stack wa-gap-s">
+        <div>
+          <h2>Voting Deviation</h2>
+          <p class="subtitle">Each player's vote z-score (deviation ÷ std dev) per issue</p>
         </div>
-        <div class="chart-container">
-          <canvas baseChart
-            [data]="chartData()"
-            [options]="chartOptions"
-            type="line">
-          </canvas>
+        <div class="wa-cluster wa-gap-m">
+          <wa-checkbox [checked]="showZScores() || undefined" (change)="toggleZScores($any($event.target).checked)">Z-scores</wa-checkbox>
+          <wa-checkbox [checked]="showAvgAbsZ() || undefined" (change)="toggleAvgAbsZ($any($event.target).checked)">Avg |z|</wa-checkbox>
         </div>
+        <wa-card>
+          <canvas baseChart [data]="chartData()" [options]="chartOptions" type="line"></canvas>
+        </wa-card>
       </div>
     }
   `,
   styles: `
     h2 {
-      font-size: 1rem;
+      font-size: 0.85rem;
       font-weight: 600;
-      color: #475569;
-      margin: 0 0 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--wa-color-neutral-on-quiet);
+      margin: 0 0 var(--wa-space-3xs);
     }
 
     .subtitle {
       font-size: 0.8rem;
-      color: #94a3b8;
-      margin: 0 0 1rem;
+      color: var(--wa-color-neutral-on-quiet);
+      margin: 0;
+      opacity: 0.7;
     }
 
-    .controls {
-      display: flex;
-      gap: 1rem;
-      margin-bottom: 0.75rem;
-
-      label {
-        display: flex;
-        align-items: center;
-        gap: 0.35rem;
-        font-size: 0.8rem;
-        color: #64748b;
-        cursor: pointer;
-      }
-    }
-
-    .chart-container {
-      background: #fff;
-      border-radius: 12px;
-      border: 1px solid #e2e8f0;
-      padding: 1.25rem;
-    }
   `,
 })
 export class VotingDeviationChartComponent {
@@ -74,8 +55,12 @@ export class VotingDeviationChartComponent {
   showZScores = signal(true);
   showAvgAbsZ = signal(true);
 
-  toggleZScores(checked: boolean) { this.showZScores.set(checked); }
-  toggleAvgAbsZ(checked: boolean) { this.showAvgAbsZ.set(checked); }
+  toggleZScores(checked: boolean) {
+    this.showZScores.set(checked);
+  }
+  toggleAvgAbsZ(checked: boolean) {
+    this.showAvgAbsZ.set(checked);
+  }
 
   readonly chartOptions: ChartOptions<'line'> = {
     responsive: true,
@@ -107,7 +92,12 @@ export class VotingDeviationChartComponent {
         ticks: { color: '#64748b', font: { size: 11 } },
       },
       y: {
-        title: { display: true, text: 'Z-score (std deviations from avg)', color: '#64748b', font: { size: 11 } },
+        title: {
+          display: true,
+          text: 'Z-score (std deviations from avg)',
+          color: '#64748b',
+          font: { size: 11 },
+        },
         grid: {
           color: (ctx) => (ctx.tick.value === 0 ? '#94a3b8' : '#f1f5f9'),
         },
@@ -124,10 +114,8 @@ export class VotingDeviationChartComponent {
   };
 
   readonly chartData = computed((): ChartData<'line'> => {
-    // History is stored newest-first; reverse so issue #1 is the oldest
     const history = [...this.room.resolvedHistory()].reverse();
 
-    // Collect all unique player names
     const playerNames = new Set<string>();
     for (const entry of history) {
       for (const [peerId] of Object.entries(entry.votes)) {
@@ -141,17 +129,13 @@ export class VotingDeviationChartComponent {
 
     const datasets = players.flatMap((playerName, colorIdx) => {
       const zScores: (number | null)[] = history.map((entry) => {
-        // Find this player's vote in this entry
-        const peerId = Object.keys(entry.players).find(
-          (id) => entry.players[id] === playerName,
-        );
+        const peerId = Object.keys(entry.players).find((id) => entry.players[id] === playerName);
         if (!peerId) return null;
 
         const voteStr = entry.votes[peerId];
         const vote = parseFloat(voteStr);
         if (isNaN(vote)) return null;
 
-        // Compute round average and standard deviation of numeric votes
         const numericVotes = Object.values(entry.votes)
           .map((v) => parseFloat(v))
           .filter((v) => !isNaN(v));
@@ -159,13 +143,12 @@ export class VotingDeviationChartComponent {
 
         const avg = numericVotes.reduce((a, b) => a + b, 0) / numericVotes.length;
         const stdDev = Math.sqrt(
-          numericVotes.reduce((a, b) => a + (b - avg) ** 2, 0) / numericVotes.length
+          numericVotes.reduce((a, b) => a + (b - avg) ** 2, 0) / numericVotes.length,
         );
         if (stdDev === 0) return 0;
         return parseFloat(((vote - avg) / stdDev).toFixed(2));
       });
 
-      // Cumulative mean absolute z-score up to each issue
       const cumulativeMeanAbsZ: (number | null)[] = [];
       let runningSum = 0;
       let runningCount = 0;
@@ -174,7 +157,9 @@ export class VotingDeviationChartComponent {
           runningSum += Math.abs(z);
           runningCount++;
         }
-        cumulativeMeanAbsZ.push(runningCount > 0 ? parseFloat((runningSum / runningCount).toFixed(2)) : null);
+        cumulativeMeanAbsZ.push(
+          runningCount > 0 ? parseFloat((runningSum / runningCount).toFixed(2)) : null,
+        );
       }
 
       const color = COLORS[colorIdx % COLORS.length];

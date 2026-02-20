@@ -8,37 +8,38 @@ import { RoomService } from '../../services/room.service';
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
     @if (room.history().length > 0) {
-      <div class="section">
+      <div class="wa-stack wa-gap-s">
         <h2>Voting History</h2>
         @for (entry of room.resolvedHistory(); track entry.timestamp) {
-          <div class="history-card">
+          <wa-card class="history-card">
             <div class="history-header">
               @if (editingTimestamp() === entry.timestamp) {
-                <span class="story-name-wrap">
-                  <input
+                <div class="wa-cluster wa-gap-xs" style="align-items: center">
+                  <wa-input
                     class="story-name-input"
+                    size="small"
                     [value]="editingValue()"
                     (input)="editingValue.set($any($event.target).value)"
                     (keydown.enter)="saveEdit(entry.timestamp)"
                     (keydown.escape)="cancelEdit()"
-                    #editInput
-                  />
-                  <wa-icon name="check" class="save-icon" (click)="saveEdit(entry.timestamp)"></wa-icon>
-                  <wa-icon name="xmark" class="cancel-icon" (click)="cancelEdit()"></wa-icon>
-                </span>
+                  ></wa-input>
+                  <wa-icon name="check" class="action-icon save" (click)="saveEdit(entry.timestamp)"></wa-icon>
+                  <wa-icon name="xmark" class="action-icon cancel" (click)="cancelEdit()"></wa-icon>
+                </div>
               } @else {
-                <span class="story-name-wrap">
+                <div class="wa-cluster wa-gap-xs story-wrap" style="align-items: center">
                   <span class="story-name">{{ entry.story || 'Untitled' }}</span>
-                  <wa-icon name="pencil" class="edit-icon" (click)="startEdit(entry.timestamp, entry.story || '')"></wa-icon>
-                  <wa-icon name="trash" class="delete-icon" (click)="deleteEntry(entry.timestamp)"></wa-icon>
-                </span>
+                  <wa-icon name="pencil" class="action-icon edit" (click)="startEdit(entry.timestamp, entry.story || '')"></wa-icon>
+                  <wa-icon name="trash" class="action-icon delete" (click)="deleteEntry(entry.timestamp)"></wa-icon>
+                </div>
               }
               <div class="meta">
                 <span class="timestamp">{{ entry.timestamp | date:'M/d/yyyy h:mm a' }}</span>
                 <span class="average">{{ calcAverage(entry.votes) }}</span>
               </div>
             </div>
-            <div class="votes-grid">
+            <wa-divider style="margin: var(--wa-space-s) 0"></wa-divider>
+            <div class="wa-grid wa-gap-2xs" style="--min-column-size: 160px">
               @for (vote of entry.votes | keyvalue; track vote.key) {
                 <div class="vote-entry">
                   <span class="voter-name">{{ entry.players[vote.key] || 'Unknown' }}</span>
@@ -46,150 +47,117 @@ import { RoomService } from '../../services/room.service';
                 </div>
               }
             </div>
-          </div>
+          </wa-card>
         }
       </div>
     }
   `,
   styles: `
     h2 {
-      font-size: 1rem;
+      font-size: 0.85rem;
       font-weight: 600;
-      color: #475569;
-      margin: 0 0 0.75rem;
-    }
-
-    .history-card {
-      background: #fff;
-      border-radius: 12px;
-      border: 1px solid #e2e8f0;
-      padding: 1rem 1.25rem;
-      margin-bottom: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--wa-color-neutral-on-quiet);
+      margin: 0;
     }
 
     .history-header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 0.75rem;
-    }
-
-    .story-name-wrap {
-      display: flex;
-      align-items: center;
-      gap: 0.375rem;
+      gap: var(--wa-space-s);
     }
 
     .story-name {
       font-weight: 600;
-      color: #1e293b;
+      color: var(--wa-color-neutral-on-default);
       font-size: 1rem;
     }
 
-    .edit-icon {
-      font-size: 0.8rem;
-      color: #94a3b8;
+    .action-icon {
       cursor: pointer;
-      opacity: 0;
-      transition: opacity 0.15s;
+      font-size: 0.8rem;
+      transition: color 0.15s, opacity 0.15s;
     }
 
-    .history-card:hover .edit-icon {
+    .story-wrap .action-icon {
+      opacity: 0;
+    }
+
+    .history-card:hover .story-wrap .action-icon {
       opacity: 1;
     }
 
-    .edit-icon:hover {
-      color: #2563eb;
+    .action-icon.edit {
+      color: var(--wa-color-neutral-on-quiet);
+    }
+    .action-icon.edit:hover {
+      color: var(--wa-color-brand-fill-loud);
     }
 
-    .delete-icon {
-      font-size: 0.8rem;
-      color: #94a3b8;
-      cursor: pointer;
-      opacity: 0;
-      transition: opacity 0.15s;
+    .action-icon.delete {
+      color: var(--wa-color-neutral-on-quiet);
+    }
+    .action-icon.delete:hover {
+      color: var(--wa-color-danger-fill-loud);
     }
 
-    .history-card:hover .delete-icon {
-      opacity: 1;
+    .action-icon.save {
+      color: var(--wa-color-success-fill-loud);
     }
 
-    .delete-icon:hover {
-      color: #ef4444;
+    .action-icon.cancel {
+      color: var(--wa-color-neutral-on-quiet);
     }
-
-    .save-icon {
-      font-size: 0.85rem;
-      color: #16a34a;
-      cursor: pointer;
-    }
-
-    .save-icon:hover {
-      color: #15803d;
-    }
-
-    .cancel-icon {
-      font-size: 0.85rem;
-      color: #94a3b8;
-      cursor: pointer;
-    }
-
-    .cancel-icon:hover {
-      color: #ef4444;
+    .action-icon.cancel:hover {
+      color: var(--wa-color-danger-fill-loud);
     }
 
     .story-name-input {
-      font-weight: 600;
-      color: #1e293b;
-      font-size: 1rem;
-      border: 1px solid #2563eb;
-      border-radius: 4px;
-      padding: 0 4px;
-      outline: none;
-      background: #fff;
-      min-width: 120px;
+      min-width: 160px;
     }
 
     .meta {
       text-align: right;
+      flex-shrink: 0;
     }
 
     .timestamp {
       display: block;
-      color: #94a3b8;
-      font-size: 0.8rem;
+      color: var(--wa-color-neutral-on-quiet);
+      font-size: 0.78rem;
     }
 
     .average {
       display: block;
-      color: #2563eb;
+      color: var(--wa-color-brand-fill-loud);
       font-weight: 700;
-      font-size: 0.9rem;
-      margin-top: 0.125rem;
-    }
-
-    .votes-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: 0.375rem;
+      font-size: 0.875rem;
     }
 
     .vote-entry {
       display: flex;
       justify-content: space-between;
-      padding: 0.375rem 0.5rem;
-      background: #f8fafc;
-      border-radius: 6px;
+      align-items: center;
+      padding: var(--wa-space-2xs) var(--wa-space-xs);
+      background: var(--wa-color-surface-lowered);
+      border-radius: var(--wa-border-radius-s);
       font-size: 0.875rem;
+      gap: var(--wa-space-s);
     }
 
     .voter-name {
-      color: #475569;
+      color: var(--wa-color-neutral-on-quiet);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .vote-value {
-      font-weight: 600;
-      color: #1e293b;
+      font-weight: 700;
+      color: var(--wa-color-brand-fill-loud);
+      flex-shrink: 0;
     }
   `,
 })
@@ -202,9 +170,8 @@ export class VotingHistoryComponent {
     this.editingTimestamp.set(timestamp);
     this.editingValue.set(story);
     setTimeout(() => {
-      const input = document.querySelector<HTMLInputElement>('.story-name-input');
-      input?.focus();
-      input?.select();
+      const waInput = document.querySelector<HTMLElement & { focus(): void }>('.story-name-input');
+      waInput?.focus();
     });
   }
 
@@ -222,7 +189,9 @@ export class VotingHistoryComponent {
   }
 
   calcAverage(votes: Record<string, string>): string {
-    const nums = Object.values(votes).map(v => parseFloat(v)).filter(v => !isNaN(v));
+    const nums = Object.values(votes)
+      .map((v) => parseFloat(v))
+      .filter((v) => !isNaN(v));
     if (nums.length === 0) return 'No numeric votes';
     const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
     return `Avg: ${avg % 1 === 0 ? avg.toString() : avg.toFixed(1)}`;
