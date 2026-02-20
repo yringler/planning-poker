@@ -200,6 +200,14 @@ export class RoomService {
     });
   }
 
+  deleteHistoryEntry(timestamp: number): void {
+    if (!this.doc) return;
+    const historyArray = this.doc.getArray<HistoryEntry>('history');
+    const index = historyArray.toArray().findIndex(e => e.timestamp === timestamp);
+    if (index === -1) return;
+    this.doc.transact(() => historyArray.delete(index, 1));
+  }
+
   resetRound(): void {
     if (!this.doc) return;
     this.doc.transact(() => {

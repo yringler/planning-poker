@@ -30,6 +30,7 @@ import { RoomService } from '../../services/room.service';
                 <span class="story-name-wrap">
                   <span class="story-name">{{ entry.story || 'Untitled' }}</span>
                   <wa-icon name="pencil" class="edit-icon" (click)="startEdit(entry.timestamp, entry.story || '')"></wa-icon>
+                  <wa-icon name="trash" class="delete-icon" (click)="deleteEntry(entry.timestamp)"></wa-icon>
                 </span>
               }
               <div class="meta">
@@ -99,6 +100,22 @@ import { RoomService } from '../../services/room.service';
 
     .edit-icon:hover {
       color: #2563eb;
+    }
+
+    .delete-icon {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .history-card:hover .delete-icon {
+      opacity: 1;
+    }
+
+    .delete-icon:hover {
+      color: #ef4444;
     }
 
     .save-icon {
@@ -198,6 +215,10 @@ export class VotingHistoryComponent {
 
   cancelEdit(): void {
     this.editingTimestamp.set(null);
+  }
+
+  deleteEntry(timestamp: number): void {
+    this.room.deleteHistoryEntry(timestamp);
   }
 
   calcAverage(votes: Record<string, string>): string {
