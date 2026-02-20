@@ -202,16 +202,11 @@ export class RoomService {
 
   resetRound(): void {
     if (!this.doc) return;
-    const historyArray = this.doc.getArray<HistoryEntry>('history');
     this.doc.transact(() => {
       const votesMap = this.doc!.getMap('votes');
       const keys = Array.from(votesMap.keys());
       keys.forEach(k => votesMap.delete(k));
       this.doc!.getMap('session').set('phase', 'voting');
-      // Remove the history entry that was added on reveal
-      if (historyArray.length > 0) {
-        historyArray.delete(0, 1);
-      }
     });
   }
 
