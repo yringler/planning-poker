@@ -187,6 +187,19 @@ export class RoomService {
     });
   }
 
+  updateHistoryStory(timestamp: number, newStory: string): void {
+    if (!this.doc) return;
+    const historyArray = this.doc.getArray<HistoryEntry>('history');
+    const entries = historyArray.toArray();
+    const index = entries.findIndex(e => e.timestamp === timestamp);
+    if (index === -1) return;
+    const updated = { ...entries[index], story: newStory };
+    this.doc.transact(() => {
+      historyArray.delete(index, 1);
+      historyArray.insert(index, [updated]);
+    });
+  }
+
   resetRound(): void {
     if (!this.doc) return;
     const historyArray = this.doc.getArray<HistoryEntry>('history');

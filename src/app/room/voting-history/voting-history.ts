@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { DatePipe, KeyValuePipe } from '@angular/common';
 import { RoomService } from '../../services/room.service';
 
@@ -12,7 +12,21 @@ import { RoomService } from '../../services/room.service';
         @for (entry of room.resolvedHistory(); track entry.timestamp) {
           <div class="history-card">
             <div class="history-header">
-              <span class="story-name">{{ entry.story || 'Untitled' }}</span>
+              @if (editingTimestamp() === entry.timestamp) {
+                <input
+                  class="story-name-input"
+                  [value]="editingValue()"
+                  (input)="editingValue.set($any($event.target).value)"
+                  (blur)="saveEdit(entry.timestamp)"
+                  (keydown.enter)="saveEdit(entry.timestamp)"
+                  (keydown.escape)="cancelEdit()"
+                  #editInput
+                />
+              } @else {
+                <span class="story-name" (click)="startEdit(entry.timestamp, entry.story || '')">
+                  {{ entry.story || 'Untitled' }}
+                </span>
+              }
               <div class="meta">
                 <span class="timestamp">{{ entry.timestamp | date:'M/d/yyyy h:mm a' }}</span>
                 <span class="average">{{ calcAverage(entry.votes) }}</span>
@@ -58,6 +72,25 @@ import { RoomService } from '../../services/room.service';
       font-weight: 600;
       color: #1e293b;
       font-size: 1rem;
+      cursor: text;
+      border-radius: 4px;
+      padding: 0 2px;
+    }
+
+    .story-name:hover {
+      background: #f1f5f9;
+    }
+
+    .story-name-input {
+      font-weight: 600;
+      color: #1e293b;
+      font-size: 1rem;
+      border: 1px solid #2563eb;
+      border-radius: 4px;
+      padding: 0 4px;
+      outline: none;
+      background: #fff;
+      min-width: 120px;
     }
 
     .meta {
@@ -105,6 +138,27 @@ import { RoomService } from '../../services/room.service';
 })
 export class VotingHistoryComponent {
   readonly room = inject(RoomService);
+  readonly editingTimestamp = signal<number | null>(null);
+  readonly editingValue = signal('');
+
+  startEdit(timestamp: number, story: string): void {
+    this.editingTimestamp.set(timestamp);
+    this.editingValue.set(story);
+    setTimeout(() => {
+      const input = document.querySelector<HTMLInputElement>('.story-name-input');
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  saveEdit(timestamp: number): void {
+    this.room.updateHistoryStory(timestamp, this.editingValue().trim());
+    this.editingTimestamp.set(null);
+  }
+
+  cancelEdit(): void {
+    this.editingTimestamp.set(null);
+  }
 
   calcAverage(votes: Record<string, string>): string {
     const nums = Object.values(votes).map(v => parseFloat(v)).filter(v => !isNaN(v));
