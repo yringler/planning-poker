@@ -42,6 +42,14 @@ import { RoomService } from '../../services/room.service';
               <wa-icon slot="start" name="arrow-rotate-left"></wa-icon>
               Reset
             </wa-button>
+            <wa-button
+              variant="neutral"
+              [attr.appearance]="room.isObserver() ? 'filled' : 'outlined'"
+              (click)="room.toggleObserver()"
+            >
+              <wa-icon slot="start" name="eye-slash"></wa-icon>
+              {{ room.isObserver() ? 'Observing' : 'Observe' }}
+            </wa-button>
           </div>
         }
       </div>
@@ -79,17 +87,19 @@ export class ActionBarComponent {
 
   readonly voteCount = computed(() => Object.keys(this.room.votes()).length);
 
+  readonly voters = computed(() => this.room.players().filter((p) => !p.observer));
+
   readonly allVoted = computed(() => {
-    const players = this.room.players();
+    const voters = this.voters();
     const votes = this.room.votes();
-    return players.length > 0 && players.every((p) => votes[p.peerId] != null);
+    return voters.length > 0 && voters.every((p) => votes[p.peerId] != null);
   });
 
   readonly statusMessage = computed(() => {
     if (this.allVoted()) {
       return 'All votes in!';
     }
-    return `Waiting for votes… (${this.voteCount()}/${this.room.players().length})`;
+    return `Waiting for votes… (${this.voteCount()}/${this.voters().length})`;
   });
 
   readonly averageText = computed(() => {

@@ -6,6 +6,7 @@ import { environment } from '../../environments/environment';
 export interface Player {
   name: string;
   peerId: string;
+  observer?: boolean;
 }
 
 export interface HistoryEntry {
@@ -28,6 +29,7 @@ export class RoomService {
   readonly history = signal<HistoryEntry[]>([]);
   readonly myPeerId = signal('');
   readonly connected = signal(false);
+  readonly isObserver = signal(false);
 
   readonly resolvedHistory = computed(() => {
     const currentPlayers = this.players();
@@ -122,7 +124,11 @@ export class RoomService {
       const playerList: Player[] = [];
       states.forEach((state: Record<string, unknown>) => {
         if (state?.['name'] && state?.['peerId']) {
-          playerList.push({ name: state['name'] as string, peerId: state['peerId'] as string });
+          playerList.push({
+            name: state['name'] as string,
+            peerId: state['peerId'] as string,
+            observer: !!state['observer'],
+          });
         }
       });
       this.players.set(playerList);
@@ -145,11 +151,24 @@ export class RoomService {
       this.doc = null;
     }
     this.connected.set(false);
+    this.isObserver.set(false);
     this.players.set([]);
     this.votes.set({});
     this.history.set([]);
     this.phase.set('voting');
     this.storyName.set('');
+  }
+
+  toggleObserver(): void {
+    if (!this.provider) return;
+    const next = !this.isObserver();
+    this.isObserver.set(next);
+    const current = this.provider.awareness.getLocalState() ?? {};
+    this.provider.awareness.setLocalState({ ...current, observer: next });
+    if (next) {
+      // Remove any existing vote when becoming an observer
+      this.doc?.getMap('votes').delete(this.myPeerId());
+    }
   }
 
   vote(value: string): void {

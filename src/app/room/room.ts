@@ -73,7 +73,9 @@ import { VotingDeviationChartComponent } from './voting-deviation-chart/voting-d
           <wa-icon slot="start" name="book"></wa-icon>
         </wa-input>
 
-        <app-card-grid />
+        @if (!room.isObserver()) {
+          <app-card-grid />
+        }
         <app-participants-list />
         <app-action-bar />
         <app-voting-history />
@@ -125,9 +127,13 @@ export class RoomComponent implements OnInit, OnDestroy {
 
   readonly hasConsensus = computed(() => {
     const phase = this.room.phase();
-    const votes = this.room.votes();
     if (phase !== 'revealed') return false;
-    const voteValues = Object.values(votes);
+    const votes = this.room.votes();
+    const players = this.room.players();
+    const observerIds = new Set(players.filter((p) => p.observer).map((p) => p.peerId));
+    const voteValues = Object.entries(votes)
+      .filter(([peerId]) => !observerIds.has(peerId))
+      .map(([, v]) => v);
     if (voteValues.length < 2) return false;
     return voteValues.every((v) => v === voteValues[0]);
   });

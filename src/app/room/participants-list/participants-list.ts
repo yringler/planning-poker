@@ -18,7 +18,11 @@ import { RoomService } from '../../services/room.service';
             <wa-avatar [initials]="initials(player.name)" shape="rounded" style="--size: 2rem"></wa-avatar>
             <span class="name">{{ player.name }}</span>
             <span class="status-badge">
-              @if (statusClass(player.peerId) === 'waiting') {
+              @if (player.observer) {
+                <wa-tag variant="neutral" appearance="outlined" size="small">
+                  <wa-icon name="eye-slash"></wa-icon> Observer
+                </wa-tag>
+              } @else if (statusClass(player.peerId) === 'waiting') {
                 <wa-tag variant="neutral" appearance="outlined" size="small">Waiting…</wa-tag>
               } @else if (statusClass(player.peerId) === 'voted') {
                 <wa-tag variant="success" appearance="filled" size="small">
