@@ -8,15 +8,13 @@ import { RoomService } from '../../services/room.service';
     <div class="wa-flank">
       <div class="wa-stack wa-gap-3xs">
         <h1>Planning Poker</h1>
-        <wa-tooltip content="Click to copy link">
-          <wa-button class="session-code-btn" appearance="plain" size="small" (click)="copyLink()">
-            <wa-icon slot="start" name="link"></wa-icon>
-            Session: {{ roomCode() }}
-            @if (showCopied) {
-              <wa-badge slot="end" variant="success" appearance="filled" pill>Copied!</wa-badge>
-            }
-          </wa-button>
-        </wa-tooltip>
+        <button class="session-code-btn" (click)="copyLink()" title="Click to copy link">
+          <wa-icon name="link"></wa-icon>
+          Session: {{ roomCode() }}
+          @if (showCopied) {
+            <wa-badge variant="success" appearance="filled" pill>Copied!</wa-badge>
+          }
+        </button>
       </div>
       <div slot="end" class="wa-cluster wa-gap-xs" style="align-items: center">
         <wa-icon name="users"></wa-icon>
@@ -33,7 +31,16 @@ import { RoomService } from '../../services/room.service';
     }
 
     .session-code-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--wa-space-2xs);
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
       color: var(--wa-color-neutral-on-quiet);
+      font-size: 0.9rem;
+      font-family: inherit;
     }
 
     .session-code-btn:hover {
