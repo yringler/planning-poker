@@ -1,10 +1,11 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { DatePipe, KeyValuePipe } from '@angular/common';
 import { RoomService } from '../../services/room.service';
 
 @Component({
   selector: 'app-voting-history',
   imports: [DatePipe, KeyValuePipe],
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
     @if (room.history().length > 0) {
       <div class="section">
@@ -13,18 +14,22 @@ import { RoomService } from '../../services/room.service';
           <div class="history-card">
             <div class="history-header">
               @if (editingTimestamp() === entry.timestamp) {
-                <input
-                  class="story-name-input"
-                  [value]="editingValue()"
-                  (input)="editingValue.set($any($event.target).value)"
-                  (blur)="saveEdit(entry.timestamp)"
-                  (keydown.enter)="saveEdit(entry.timestamp)"
-                  (keydown.escape)="cancelEdit()"
-                  #editInput
-                />
+                <span class="story-name-wrap">
+                  <input
+                    class="story-name-input"
+                    [value]="editingValue()"
+                    (input)="editingValue.set($any($event.target).value)"
+                    (keydown.enter)="saveEdit(entry.timestamp)"
+                    (keydown.escape)="cancelEdit()"
+                    #editInput
+                  />
+                  <wa-icon name="check" class="save-icon" (click)="saveEdit(entry.timestamp)"></wa-icon>
+                  <wa-icon name="xmark" class="cancel-icon" (click)="cancelEdit()"></wa-icon>
+                </span>
               } @else {
-                <span class="story-name" (click)="startEdit(entry.timestamp, entry.story || '')">
-                  {{ entry.story || 'Untitled' }}
+                <span class="story-name-wrap">
+                  <span class="story-name">{{ entry.story || 'Untitled' }}</span>
+                  <wa-icon name="pencil" class="edit-icon" (click)="startEdit(entry.timestamp, entry.story || '')"></wa-icon>
                 </span>
               }
               <div class="meta">
@@ -68,17 +73,52 @@ import { RoomService } from '../../services/room.service';
       margin-bottom: 0.75rem;
     }
 
+    .story-name-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
     .story-name {
       font-weight: 600;
       color: #1e293b;
       font-size: 1rem;
-      cursor: text;
-      border-radius: 4px;
-      padding: 0 2px;
     }
 
-    .story-name:hover {
-      background: #f1f5f9;
+    .edit-icon {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .history-card:hover .edit-icon {
+      opacity: 1;
+    }
+
+    .edit-icon:hover {
+      color: #2563eb;
+    }
+
+    .save-icon {
+      font-size: 0.85rem;
+      color: #16a34a;
+      cursor: pointer;
+    }
+
+    .save-icon:hover {
+      color: #15803d;
+    }
+
+    .cancel-icon {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      cursor: pointer;
+    }
+
+    .cancel-icon:hover {
+      color: #ef4444;
     }
 
     .story-name-input {
