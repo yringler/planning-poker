@@ -26,8 +26,6 @@ import { RoomService } from '../../services/room.service';
           <span class="status-text">
             @if (allVoted()) {
               <wa-icon name="circle-check" style="color: var(--wa-color-success-fill-loud)"></wa-icon>
-            } @else {
-              <wa-spinner style="font-size: 1rem"></wa-spinner>
             }
             {{ statusMessage() }}
           </span>
