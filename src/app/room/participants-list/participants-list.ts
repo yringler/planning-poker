@@ -64,7 +64,7 @@ import { RoomService } from '../../services/room.service';
 
     .participant.voted {
       border-color: var(--wa-color-success-stroke-loud);
-      background: var(--wa-color-success-fill-quiet);
+      background: var(--wa-color-success-fill-normal);
     }
 
     .participant.revealed {
