@@ -129,7 +129,7 @@ export class RoomComponent implements OnInit, OnDestroy {
     const phase = this.room.phase();
     if (phase !== 'revealed') return false;
     const votes = this.room.votes();
-    const players = this.room.players();
+    const players = this.room.uniquePlayers();
     const observerIds = new Set(players.filter((p) => p.observer).map((p) => p.peerId));
     const voteValues = Object.entries(votes)
       .filter(([peerId]) => !observerIds.has(peerId))

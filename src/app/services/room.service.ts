@@ -25,14 +25,26 @@ export class RoomService {
   readonly storyName = signal('');
   readonly phase = signal<'voting' | 'revealed'>('voting');
   readonly votes = signal<Record<string, string>>({});
-  readonly players = signal<Player[]>([]);
-  readonly history = signal<HistoryEntry[]>([]);
+  private readonly players = signal<Player[]>([]);
+  readonly uniquePlayers = computed(() => {
+    const votes = this.votes();
+    const seen = new Map<string, Player>();
+    for (const p of this.players()) {
+      const existing = seen.get(p.name);
+      // Prefer the entry that has voted; otherwise last one wins
+      if (!existing || (!votes[existing.peerId] && votes[p.peerId])) {
+        seen.set(p.name, p);
+      }
+    }
+    return Array.from(seen.values());
+  });
+  private readonly history = signal<HistoryEntry[]>([]);
   readonly myPeerId = signal('');
   readonly connected = signal(false);
   readonly isObserver = signal(false);
 
   readonly resolvedHistory = computed(() => {
-    const currentPlayers = this.players();
+    const currentPlayers = this.uniquePlayers();
     const history = this.history();
 
     const onlineNameCount = new Map<string, number>();
@@ -186,7 +198,7 @@ export class RoomService {
     const historyArray = this.doc.getArray<HistoryEntry>('history');
 
     const playerNames: Record<string, string> = {};
-    this.players().forEach(p => {
+    this.uniquePlayers().forEach(p => {
       playerNames[p.peerId] = p.name;
     });
 

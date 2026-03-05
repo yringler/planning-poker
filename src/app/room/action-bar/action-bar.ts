@@ -87,7 +87,7 @@ export class ActionBarComponent {
 
   readonly voteCount = computed(() => Object.keys(this.room.votes()).length);
 
-  readonly voters = computed(() => this.room.players().filter((p) => !p.observer));
+  readonly voters = computed(() => this.room.uniquePlayers().filter((p) => !p.observer));
 
   readonly allVoted = computed(() => {
     const voters = this.voters();

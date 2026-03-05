@@ -18,7 +18,7 @@ import { RoomService } from '../../services/room.service';
       </div>
       <div slot="end" class="wa-cluster wa-gap-xs" style="align-items: center">
         <wa-icon name="users"></wa-icon>
-        <span class="player-count">{{ room.players().length }}</span>
+        <span class="player-count">{{ room.uniquePlayers().length }}</span>
       </div>
     </div>
   `,

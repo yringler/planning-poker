@@ -8,7 +8,7 @@ import { RoomService } from '../../services/room.service';
     <div>
       <h2>Participants</h2>
       <div class="wa-grid wa-gap-xs" style="--min-column-size: 200px">
-        @for (player of room.players(); track player.peerId) {
+        @for (player of room.uniquePlayers(); track player.peerId) {
           <div
             class="participant"
             [class.me]="player.peerId === room.myPeerId()"
