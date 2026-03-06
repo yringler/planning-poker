@@ -183,27 +183,6 @@ export class RoomComponent implements OnInit, OnDestroy {
         origin: { x: 0, y: 1 },
         colors: ['#2563eb', '#16a34a', '#f59e0b'],
       });
-      confetti({
-        particleCount: 5,
-        angle: 125,
-        spread: 80,
-        origin: { x: 1, y: 1 },
-        colors: ['#2563eb', '#16a34a', '#f59e0b'],
-      });
-      confetti({
-        particleCount: 5,
-        angle: 325,
-        spread: 80,
-        origin: { x: 0, y: 0 },
-        colors: ['#2563eb', '#16a34a', '#f59e0b'],
-      });
-      confetti({
-        particleCount: 5,
-        angle: 235,
-        spread: 80,
-        origin: { x: 1, y: 0 },
-        colors: ['#2563eb', '#16a34a', '#f59e0b'],
-      });
       if (Date.now() < end) requestAnimationFrame(frame);
     };
     frame();
