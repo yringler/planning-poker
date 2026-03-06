@@ -14,7 +14,7 @@ const COLORS = [
   providers: [provideCharts(withDefaultRegisterables())],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
-    @if (room.history().length > 1) {
+    @if (room.resolvedHistory().length > 1) {
       <div class="wa-stack wa-gap-s">
         <div>
           <h2>Voting Deviation</h2>

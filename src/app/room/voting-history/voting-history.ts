@@ -7,7 +7,7 @@ import { RoomService } from '../../services/room.service';
   imports: [DatePipe, KeyValuePipe],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
-    @if (room.history().length > 0) {
+    @if (room.resolvedHistory().length > 0) {
       <div class="wa-stack wa-gap-s">
         <h2>Voting History</h2>
         @for (entry of room.resolvedHistory(); track entry.timestamp) {
