@@ -82,7 +82,7 @@ export class RoomService {
     this.disconnect();
 
     this.doc = new Y.Doc();
-    const peerId = this.doc.clientID.toString();
+    const peerId = this.getOrCreatePeerId();
     this.myPeerId.set(peerId);
 
     this.provider = new YPartyKitProvider(environment.partyKitHost, `planning-poker-${roomCode}`, this.doc);
@@ -269,5 +269,13 @@ export class RoomService {
     this.doc?.getMap('session').set('storyName', name);
   }
 
-
+  private getOrCreatePeerId(): string {
+    const key = 'pp-peer-id';
+    let id = localStorage.getItem(key);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(key, id);
+    }
+    return id;
+  }
 }
