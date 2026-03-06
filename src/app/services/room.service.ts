@@ -88,7 +88,9 @@ export class RoomService {
     this.provider = new YPartyKitProvider(environment.partyKitHost, `planning-poker-${roomCode}`, this.doc);
 
     // Set awareness
-    this.provider.awareness.setLocalState({ name: playerName, peerId });
+    const savedObserver = localStorage.getItem('pp-observer') === 'true';
+    this.isObserver.set(savedObserver);
+    this.provider.awareness.setLocalState({ name: playerName, peerId, observer: savedObserver || undefined });
 
     const sessionMap = this.doc.getMap('session');
     const votesMap = this.doc.getMap('votes');
@@ -175,8 +177,13 @@ export class RoomService {
     if (!this.provider) return;
     const next = !this.isObserver();
     this.isObserver.set(next);
+    if (next) {
+      localStorage.setItem('pp-observer', 'true');
+    } else {
+      localStorage.removeItem('pp-observer');
+    }
     const current = this.provider.awareness.getLocalState() ?? {};
-    this.provider.awareness.setLocalState({ ...current, observer: next });
+    this.provider.awareness.setLocalState({ ...current, observer: next || undefined });
     if (next) {
       // Remove any existing vote when becoming an observer
       this.doc?.getMap('votes').delete(this.myPeerId());
