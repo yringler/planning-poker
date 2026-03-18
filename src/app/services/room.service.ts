@@ -26,6 +26,11 @@ export class RoomService {
   readonly phase = signal<'voting' | 'revealed'>('voting');
   readonly votes = signal<Record<string, string>>({});
   private readonly players = signal<Player[]>([]);
+  readonly timerDuration = signal(60);
+  readonly timerEndTime = signal<number | null>(null);
+  readonly timerState = signal<'idle' | 'running' | 'paused'>('idle');
+  readonly timerRemainingOnPause = signal(0);
+  readonly timerVisible = signal(false);
   readonly uniquePlayers = computed(() => {
     const votes = this.votes();
     const seen = new Map<string, Player>();
@@ -104,12 +109,26 @@ export class RoomService {
       if (!sessionMap.has('storyName')) {
         sessionMap.set('storyName', '');
       }
+      if (!sessionMap.has('timerDuration')) {
+        sessionMap.set('timerDuration', 60);
+      }
+      if (!sessionMap.has('timerState')) {
+        sessionMap.set('timerState', 'idle');
+      }
+      if (!sessionMap.has('timerVisible')) {
+        sessionMap.set('timerVisible', false);
+      }
     });
 
     // Observe session map
     const syncSession = () => {
       this.storyName.set((sessionMap.get('storyName') as string) ?? '');
       this.phase.set((sessionMap.get('phase') as 'voting' | 'revealed') ?? 'voting');
+      this.timerDuration.set((sessionMap.get('timerDuration') as number) ?? 60);
+      this.timerEndTime.set((sessionMap.get('timerEndTime') as number) ?? null);
+      this.timerState.set((sessionMap.get('timerState') as 'idle' | 'running' | 'paused') ?? 'idle');
+      this.timerRemainingOnPause.set((sessionMap.get('timerRemainingOnPause') as number) ?? 0);
+      this.timerVisible.set((sessionMap.get('timerVisible') as boolean) ?? false);
     };
     sessionMap.observe(syncSession);
     syncSession();
@@ -171,6 +190,11 @@ export class RoomService {
     this.history.set([]);
     this.phase.set('voting');
     this.storyName.set('');
+    this.timerDuration.set(60);
+    this.timerEndTime.set(null);
+    this.timerState.set('idle');
+    this.timerRemainingOnPause.set(0);
+    this.timerVisible.set(false);
   }
 
   toggleObserver(): void {
@@ -274,6 +298,66 @@ export class RoomService {
 
   updateStoryName(name: string): void {
     this.doc?.getMap('session').set('storyName', name);
+  }
+
+  toggleTimerVisible(): void {
+    if (!this.doc) return;
+    this.doc.getMap('session').set('timerVisible', !this.timerVisible());
+  }
+
+  startTimer(): void {
+    if (!this.doc) return;
+    const sessionMap = this.doc.getMap('session');
+    const remaining =
+      this.timerState() === 'paused' ? this.timerRemainingOnPause() : this.timerDuration();
+    this.doc.transact(() => {
+      sessionMap.set('timerEndTime', Date.now() + remaining * 1000);
+      sessionMap.set('timerState', 'running');
+      sessionMap.set('timerRemainingOnPause', 0);
+    });
+  }
+
+  pauseTimer(): void {
+    if (!this.doc) return;
+    const endTime = this.timerEndTime();
+    if (!endTime) return;
+    const remaining = Math.max(0, (endTime - Date.now()) / 1000);
+    const sessionMap = this.doc.getMap('session');
+    this.doc.transact(() => {
+      sessionMap.set('timerState', 'paused');
+      sessionMap.set('timerRemainingOnPause', remaining);
+      sessionMap.set('timerEndTime', null);
+    });
+  }
+
+  resetTimer(): void {
+    if (!this.doc) return;
+    const sessionMap = this.doc.getMap('session');
+    this.doc.transact(() => {
+      sessionMap.set('timerState', 'idle');
+      sessionMap.set('timerEndTime', null);
+      sessionMap.set('timerRemainingOnPause', 0);
+    });
+  }
+
+  adjustDuration(delta: number): void {
+    if (!this.doc) return;
+    const sessionMap = this.doc.getMap('session');
+    const newDuration = Math.max(10, this.timerDuration() + delta);
+    this.doc.transact(() => {
+      sessionMap.set('timerDuration', newDuration);
+      if (this.timerState() === 'running') {
+        const endTime = this.timerEndTime();
+        if (endTime) {
+          sessionMap.set('timerEndTime', endTime + delta * 1000);
+        }
+      } else if (this.timerState() === 'paused') {
+        sessionMap.set(
+          'timerRemainingOnPause',
+          Math.max(0, this.timerRemainingOnPause() + delta),
+        );
+      }
+    });
   }
 
   private getOrCreatePeerId(): string {

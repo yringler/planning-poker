@@ -18,6 +18,7 @@ import { ParticipantsListComponent } from './participants-list/participants-list
 import { ActionBarComponent } from './action-bar/action-bar';
 import { VotingHistoryComponent } from './voting-history/voting-history';
 import { VotingDeviationChartComponent } from './voting-deviation-chart/voting-deviation-chart';
+import { TimerComponent } from './timer/timer';
 
 @Component({
   selector: 'app-room',
@@ -29,6 +30,7 @@ import { VotingDeviationChartComponent } from './voting-deviation-chart/voting-d
     ActionBarComponent,
     VotingHistoryComponent,
     VotingDeviationChartComponent,
+    TimerComponent,
   ],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
@@ -64,14 +66,30 @@ import { VotingDeviationChartComponent } from './voting-deviation-chart/voting-d
       <div class="room-container wa-stack wa-gap-l">
         <app-session-header />
 
-        <wa-input
-          placeholder="Story name (optional)"
-          [value]="room.storyName()"
-          (input)="room.updateStoryName($any($event.target).value)"
-          style="width: 100%"
-        >
-          <wa-icon slot="start" name="book"></wa-icon>
-        </wa-input>
+        <div class="wa-flank" style="align-items: center; gap: var(--wa-space-s)">
+          <wa-input
+            placeholder="Story name (optional)"
+            [value]="room.storyName()"
+            (input)="room.updateStoryName($any($event.target).value)"
+            style="flex: 1"
+          >
+            <wa-icon slot="start" name="book"></wa-icon>
+          </wa-input>
+          <wa-button
+            slot="end"
+            size="small"
+            variant="neutral"
+            [attr.appearance]="room.timerVisible() ? 'filled' : 'outlined'"
+            (click)="room.toggleTimerVisible()"
+          >
+            <wa-icon slot="start" name="clock"></wa-icon>
+            Timer
+          </wa-button>
+        </div>
+
+        @if (room.timerVisible()) {
+          <app-timer />
+        }
 
         @if (!room.isObserver()) {
           <app-card-grid />

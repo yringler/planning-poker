@@ -46,3 +46,4 @@ Thumbs.db
 .claude/*local*
 .claude/skills/webawesome
 .agents/skills/webawesome
+skills-lock.json
