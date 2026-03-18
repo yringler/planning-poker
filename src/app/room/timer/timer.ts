@@ -31,6 +31,12 @@ import { RoomService } from '../../services/room.service';
               Start
             </wa-button>
           } @else if (room.timerState() === 'running') {
+            <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(-60)">
+              −1m
+            </wa-button>
+            <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(60)">
+              +1m
+            </wa-button>
             @if (isFinished()) {
               <wa-button size="small" variant="neutral" appearance="outlined" (click)="reset()">
                 <wa-icon slot="start" name="arrow-rotate-left"></wa-icon>
