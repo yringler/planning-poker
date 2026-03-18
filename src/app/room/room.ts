@@ -83,7 +83,7 @@ import { TimerComponent } from './timer/timer';
             (click)="room.toggleTimerVisible()"
           >
             <wa-icon slot="start" name="clock"></wa-icon>
-            Timer
+            {{ room.timerVisible() ? 'Hide Timer' : 'Show Timer' }}
           </wa-button>
         </div>
 
