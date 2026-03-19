@@ -75,20 +75,22 @@ import { TimerComponent } from './timer/timer';
           >
             <wa-icon slot="start" name="book"></wa-icon>
           </wa-input>
-          <wa-button
-            slot="end"
-            size="small"
-            variant="neutral"
-            [attr.appearance]="room.timerVisible() ? 'filled' : 'outlined'"
-            (click)="room.toggleTimerVisible()"
-          >
-            <wa-icon slot="start" name="clock"></wa-icon>
-            {{ room.timerVisible() ? 'Hide Timer' : 'Show Timer' }}
-          </wa-button>
+          @if (room.isObserver()) {
+            <wa-button
+              slot="end"
+              size="small"
+              variant="neutral"
+              [attr.appearance]="room.timerVisible() ? 'filled' : 'outlined'"
+              (click)="room.toggleTimerVisible()"
+            >
+              <wa-icon slot="start" name="clock"></wa-icon>
+              {{ room.timerVisible() ? 'Hide Timer' : 'Show Timer' }}
+            </wa-button>
+          }
         </div>
 
-        @if (room.timerVisible()) {
-          <app-timer />
+        @if (room.timerVisible() && (room.isObserver() || room.timerState() !== 'idle')) {
+          <app-timer [isObserver]="room.isObserver()" />
         }
 
         @if (!room.isObserver()) {

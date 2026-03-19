@@ -4,6 +4,7 @@ import {
   CUSTOM_ELEMENTS_SCHEMA,
   DestroyRef,
   inject,
+  input,
   signal,
 } from '@angular/core';
 import { RoomService } from '../../services/room.service';
@@ -18,51 +19,53 @@ import { RoomService } from '../../services/room.service';
         style="align-items: center; flex-wrap: wrap; gap: var(--wa-space-s)"
       >
         <span class="timer-display" [class.warning]="isWarning()">{{ displayTime() }}</span>
-        <div slot="end" class="wa-cluster wa-gap-xs">
-          @if (room.timerState() === 'idle') {
-            <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(-60)">
-              −1m
-            </wa-button>
-            <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(60)">
-              +1m
-            </wa-button>
-            <wa-button size="small" variant="brand" appearance="filled" (click)="room.startTimer()">
-              <wa-icon slot="start" name="play"></wa-icon>
-              Start
-            </wa-button>
-          } @else if (room.timerState() === 'running') {
-            <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(-60)">
-              −1m
-            </wa-button>
-            <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(60)">
-              +1m
-            </wa-button>
-            @if (isFinished()) {
-              <wa-button size="small" variant="neutral" appearance="outlined" (click)="reset()">
+        @if (isObserver()) {
+          <div slot="end" class="wa-cluster wa-gap-xs">
+            @if (room.timerState() === 'idle') {
+              <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(-60)">
+                −1m
+              </wa-button>
+              <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(60)">
+                +1m
+              </wa-button>
+              <wa-button size="small" variant="brand" appearance="filled" (click)="room.startTimer()">
+                <wa-icon slot="start" name="play"></wa-icon>
+                Start
+              </wa-button>
+            } @else if (room.timerState() === 'running') {
+              <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(-60)">
+                −1m
+              </wa-button>
+              <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(60)">
+                +1m
+              </wa-button>
+              @if (isFinished()) {
+                <wa-button size="small" variant="neutral" appearance="outlined" (click)="reset()">
+                  <wa-icon slot="start" name="arrow-rotate-left"></wa-icon>
+                  Reset
+                </wa-button>
+              } @else {
+                <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.pauseTimer()">
+                  <wa-icon slot="start" name="pause"></wa-icon>
+                  Pause
+                </wa-button>
+                <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.resetTimer()">
+                  <wa-icon slot="start" name="stop"></wa-icon>
+                  Stop
+                </wa-button>
+              }
+            } @else {
+              <wa-button size="small" variant="brand" appearance="filled" (click)="room.startTimer()">
+                <wa-icon slot="start" name="play"></wa-icon>
+                Resume
+              </wa-button>
+              <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.resetTimer()">
                 <wa-icon slot="start" name="arrow-rotate-left"></wa-icon>
                 Reset
               </wa-button>
-            } @else {
-              <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.pauseTimer()">
-                <wa-icon slot="start" name="pause"></wa-icon>
-                Pause
-              </wa-button>
-              <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.resetTimer()">
-                <wa-icon slot="start" name="stop"></wa-icon>
-                Stop
-              </wa-button>
             }
-          } @else {
-            <wa-button size="small" variant="brand" appearance="filled" (click)="room.startTimer()">
-              <wa-icon slot="start" name="play"></wa-icon>
-              Resume
-            </wa-button>
-            <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.resetTimer()">
-              <wa-icon slot="start" name="arrow-rotate-left"></wa-icon>
-              Reset
-            </wa-button>
-          }
-        </div>
+          </div>
+        }
       </div>
     </wa-card>
   `,
@@ -85,6 +88,7 @@ import { RoomService } from '../../services/room.service';
   `,
 })
 export class TimerComponent {
+  readonly isObserver = input(false);
   readonly room = inject(RoomService);
   private destroyRef = inject(DestroyRef);
   private appRef = inject(ApplicationRef);
