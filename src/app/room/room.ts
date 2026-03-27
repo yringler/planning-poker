@@ -153,7 +153,8 @@ export class RoomComponent implements OnInit, OnDestroy {
     const observerIds = new Set(players.filter((p) => p.observer).map((p) => p.peerId));
     const voteValues = Object.entries(votes)
       .filter(([peerId]) => !observerIds.has(peerId))
-      .map(([, v]) => v);
+      .map(([, v]) => v)
+      .filter((v) => v !== '?');
     if (voteValues.length < 2) return false;
     return voteValues.every((v) => v === voteValues[0]);
   });
