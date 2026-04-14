@@ -247,6 +247,7 @@ export class RoomService {
       }]);
       sessionMap.set('phase', 'revealed');
     });
+    this.resetTimer();
   }
 
   updateHistoryStory(timestamp: number, newStory: string): void {
@@ -278,6 +279,7 @@ export class RoomService {
       keys.forEach(k => votesMap.delete(k));
       this.doc!.getMap('session').set('phase', 'voting');
     });
+    this.resetTimer();
   }
 
   newRound(): void {
@@ -294,6 +296,7 @@ export class RoomService {
       sessionMap.set('phase', 'voting');
       sessionMap.set('storyName', '');
     });
+    this.resetTimer();
   }
 
   updateStoryName(name: string): void {
