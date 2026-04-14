@@ -25,6 +25,12 @@ import { RoomService } from '../../services/room.service';
               <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(-60)">
                 −1m
               </wa-button>
+              <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(-30)">
+                −30s
+              </wa-button>
+              <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(30)">
+                +30s
+              </wa-button>
               <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(60)">
                 +1m
               </wa-button>
@@ -35,6 +41,12 @@ import { RoomService } from '../../services/room.service';
             } @else if (room.timerState() === 'running') {
               <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(-60)">
                 −1m
+              </wa-button>
+              <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(-30)">
+                −30s
+              </wa-button>
+              <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(30)">
+                +30s
               </wa-button>
               <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(60)">
                 +1m
