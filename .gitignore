@@ -42,7 +42,7 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
-.partykit
+.wrangler
 .claude/*local*
 .claude/skills/webawesome
 .agents/skills/webawesome

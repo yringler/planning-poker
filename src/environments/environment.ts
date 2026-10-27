@@ -1,4 +1,4 @@
 export const environment = {
   production: false,
-  partyKitHost: 'localhost:1999',
+  partyHost: 'localhost:8787',
 };
