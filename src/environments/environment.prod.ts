@@ -1,4 +1,5 @@
 export const environment = {
   production: true,
-  partyKitHost: 'planning-poker.yringler.partykit.dev',
+  // Printed by `npm run deploy:party`: planning-poker.<your-workers-subdomain>.workers.dev
+  partyHost: 'planning-poker.ybringler.workers.dev',
 };

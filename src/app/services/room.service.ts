@@ -1,6 +1,6 @@
 import { Injectable, signal, computed, DestroyRef, inject } from '@angular/core';
 import * as Y from 'yjs';
-import YPartyKitProvider from 'y-partykit/provider';
+import YProvider from 'y-partyserver/provider';
 import { environment } from '../../environments/environment';
 
 export interface Player {
@@ -19,7 +19,7 @@ export interface HistoryEntry {
 @Injectable({ providedIn: 'root' })
 export class RoomService {
   private doc: Y.Doc | null = null;
-  private provider: YPartyKitProvider | null = null;
+  private provider: YProvider | null = null;
   private destroyRef = inject(DestroyRef);
 
   readonly storyName = signal('');
@@ -90,7 +90,10 @@ export class RoomService {
     const peerId = this.getOrCreatePeerId();
     this.myPeerId.set(peerId);
 
-    this.provider = new YPartyKitProvider(environment.partyKitHost, `planning-poker-${roomCode}`, this.doc);
+    // `party` is the kebab-cased Durable Object binding name in wrangler.jsonc
+    this.provider = new YProvider(environment.partyHost, `planning-poker-${roomCode}`, this.doc, {
+      party: 'planning-poker',
+    });
 
     // Set awareness
     const savedObserver = localStorage.getItem('pp-observer') === 'true';

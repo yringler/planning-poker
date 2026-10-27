@@ -4,11 +4,11 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "dev": "concurrently \"npx partykit dev\" \"ng serve\"",
+    "dev": "concurrently \"wrangler dev\" \"ng serve\"",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "deploy:party": "npx partykit deploy"
+    "deploy:party": "wrangler deploy"
   },
   "prettier": {
     "printWidth": 100,
@@ -35,18 +35,25 @@
     "canvas-confetti": "^1.9.4",
     "chart.js": "^4.5.1",
     "ng2-charts": "^8.0.0",
-    "partykit": "^0.0.115",
+    "partyserver": "^0.5.10",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
-    "y-partykit": "^0.0.33",
+    "y-partyserver": "^2.2.0",
     "yjs": "^13.6.29"
   },
   "devDependencies": {
     "@angular/build": "^21.1.4",
     "@angular/cli": "^21.1.4",
     "@angular/compiler-cli": "^21.1.0",
+    "@cloudflare/workers-types": "^5.20261027.1",
     "@types/canvas-confetti": "^1.9.0",
     "concurrently": "^9.2.1",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "wrangler": "^4.154.0"
+  },
+  "overrides": {
+    "y-partyserver": {
+      "@cloudflare/workers-types": "$@cloudflare/workers-types"
+    }
   }
 }
