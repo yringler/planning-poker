@@ -15,7 +15,7 @@ import { RoomService } from '../../services/room.service';
                 <wa-button
                   variant="brand"
                   appearance="filled"
-                  [attr.disabled]="!room.storyName().trim() || !room.connected() ? '' : null"
+                  [attr.disabled]="!room.storyName().trim() || !room.canRequestChecks() ? '' : null"
                   (click)="room.startCheck()"
                 >
                   <wa-icon slot="start" name="play"></wa-icon>
@@ -26,7 +26,7 @@ import { RoomService } from '../../services/room.service';
                 <wa-button
                   variant="neutral"
                   appearance="outlined"
-                  [attr.disabled]="room.connected() ? null : ''"
+                  [attr.disabled]="room.canRequestChecks() ? null : ''"
                   (click)="room.cancelCheck()"
                 >
                   <wa-icon slot="start" name="xmark"></wa-icon>
@@ -37,7 +37,7 @@ import { RoomService } from '../../services/room.service';
                 <wa-button
                   variant="brand"
                   appearance="filled"
-                  [attr.disabled]="room.connected() ? null : ''"
+                  [attr.disabled]="room.canRequestChecks() ? null : ''"
                   (click)="room.nextItem()"
                 >
                   <wa-icon slot="start" name="plus"></wa-icon>
@@ -48,7 +48,7 @@ import { RoomService } from '../../services/room.service';
                 <wa-button
                   variant="brand"
                   appearance="filled"
-                  [attr.disabled]="room.connected() ? null : ''"
+                  [attr.disabled]="room.canRequestChecks() ? null : ''"
                   (click)="room.startCheck()"
                 >
                   <wa-icon slot="start" name="arrow-rotate-left"></wa-icon>
@@ -57,7 +57,7 @@ import { RoomService } from '../../services/room.service';
                 <wa-button
                   variant="neutral"
                   appearance="outlined"
-                  [attr.disabled]="room.connected() ? null : ''"
+                  [attr.disabled]="room.canRequestChecks() ? null : ''"
                   (click)="room.skipItem()"
                 >
                   <wa-icon slot="start" name="forward"></wa-icon>

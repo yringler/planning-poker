@@ -135,6 +135,15 @@ export class RoomService {
   private readonly history = signal<HistoryEntry[]>([]);
   readonly myPeerId = signal('');
   readonly connected = signal(false);
+  /**
+   * The server has sent its clock (`time`), so it handles confidence-check requests. A Worker
+   * deployed before confidence checks never sends one and silently drops the requests.
+   */
+  readonly serverReady = signal(false);
+  /** Synced with a server that never sent `time`: it predates confidence checks. */
+  readonly serverOutdated = signal(false);
+  /** Confidence-check requests (mode / start / cancel / skip / next) can take effect. */
+  readonly canRequestChecks = computed(() => this.connected() && this.serverReady());
   readonly isObserver = signal(false);
 
   readonly resolvedHistory = computed(() =>
@@ -168,6 +177,8 @@ export class RoomService {
       }
     });
     this.provider.on('synced', (isSynced: boolean) => {
+      // A current server sends `time` on connect, ahead of the sync reply
+      if (isSynced) this.serverOutdated.set(!this.serverReady());
       if (!isSynced || synced) return;
       synced = true;
       initSession();
@@ -291,6 +302,8 @@ export class RoomService {
       this.doc = null;
     }
     this.connected.set(false);
+    this.serverReady.set(false);
+    this.serverOutdated.set(false);
     this.isObserver.set(false);
     this.players.set([]);
     this.peerNames.set({});
@@ -562,6 +575,8 @@ export class RoomService {
     if (msg.type === 'time' && typeof msg.now === 'number') {
       // Ignores one-way latency (tens of ms), which is fine for a 1-minute countdown
       this.serverOffset.set(msg.now - Date.now());
+      this.serverReady.set(true);
+      this.serverOutdated.set(false);
     }
   }
 

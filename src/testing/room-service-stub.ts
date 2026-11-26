@@ -1,4 +1,4 @@
-import { signal } from '@angular/core';
+import { computed, signal } from '@angular/core';
 import { vi } from 'vitest';
 import type {
   CheckOutcome,
@@ -10,6 +10,8 @@ import type {
 
 /** Writable-signal stand-in for RoomService, for component tests. */
 export function createRoomServiceStub() {
+  const connected = signal(true);
+  const serverReady = signal(true);
   return {
     phase: signal<'voting' | 'revealed'>('voting'),
     votes: signal<Record<string, string>>({}),
@@ -17,7 +19,10 @@ export function createRoomServiceStub() {
     checkPlayers: signal<Player[]>([]),
     confidentCount: signal(0),
     checkPhase: signal<CheckPhase>('setup'),
-    connected: signal(true),
+    connected,
+    serverReady,
+    serverOutdated: signal(false),
+    canRequestChecks: computed(() => connected() && serverReady()),
     storyName: signal(''),
     isObserver: signal(false),
     mode: signal<RoomMode>('points'),

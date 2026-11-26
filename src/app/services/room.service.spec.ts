@@ -551,6 +551,40 @@ describe('confidence requests', () => {
   });
 });
 
+describe('server support for confidence checks', () => {
+  const time = () => p.custom(JSON.stringify({ type: 'time', now: T0 }));
+
+  it('SVC-SRV-01: a current server sends time before the sync completes', () => {
+    join('ABC123', 'Ann', { synced: false });
+    expect(svc.canRequestChecks()).toBe(false);
+    time();
+    p.synced(true);
+    expect(svc.serverReady()).toBe(true);
+    expect(svc.serverOutdated()).toBe(false);
+    expect(svc.canRequestChecks()).toBe(true);
+    p.status('disconnected');
+    expect(svc.canRequestChecks()).toBe(false);
+  });
+
+  it('SVC-SRV-02: synced without time means the server predates confidence checks', () => {
+    join();
+    expect(svc.serverOutdated()).toBe(true);
+    expect(svc.canRequestChecks()).toBe(false);
+    // A late `time` (e.g. after a redeploy and reconnect) clears it
+    time();
+    expect(svc.serverOutdated()).toBe(false);
+    expect(svc.canRequestChecks()).toBe(true);
+  });
+
+  it('SVC-SRV-03: disconnect resets it', () => {
+    join();
+    time();
+    svc.disconnect();
+    expect(svc.serverReady()).toBe(false);
+    expect(svc.serverOutdated()).toBe(false);
+  });
+});
+
 describe('server messages', () => {
   beforeEach(() => join());
 
