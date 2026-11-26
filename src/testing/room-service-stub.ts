@@ -17,7 +17,6 @@ export function createRoomServiceStub() {
     votes: signal<Record<string, string>>({}),
     uniquePlayers: signal<Player[]>([]),
     checkPlayers: signal<Player[]>([]),
-    confidentCount: signal(0),
     checkPhase: signal<CheckPhase>('setup'),
     connected,
     serverReady,

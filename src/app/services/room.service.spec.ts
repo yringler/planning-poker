@@ -642,7 +642,6 @@ describe('derived signals', () => {
       d.getMap('confidence').set('p3', 5);
     });
     expect(svc.checkPlayers().map((x) => x.peerId)).toEqual(['me', 'p2']);
-    expect(svc.confidentCount()).toBe(1);
     expect(svc.amConfident()).toBe(true);
     expect(svc.onlineCount()).toBe(3);
   });
