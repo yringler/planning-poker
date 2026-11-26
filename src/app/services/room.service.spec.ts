@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as Y from 'yjs';
 import { FakeProvider, fakeProviderFactory } from '../../testing/fake-provider';
-import type { CheckState, HistoryEntry } from '../shared/confidence-protocol';
+import type { CheckOutcome, CheckState, HistoryEntry } from '../shared/confidence-protocol';
 import { RoomService, Y_PROVIDER_FACTORY } from './room.service';
 
 const T0 = 1_700_000_000_000;
@@ -439,11 +439,116 @@ describe('voting and history', () => {
   });
 });
 
-// SVC-REQ-01..09 (startCheck / cancelCheck / nextItem / skipItem / setMode / setConfident
-// requests) are skipped here: the confidence-check button flow and how RoomService sends those
-// requests are owned by a separate follow-up investigation.
 describe('confidence requests', () => {
-  it.skip('SVC-REQ-01..09: owned by the confidence-check follow-up', () => undefined);
+  const PAUSED_OUTCOME: CheckOutcome = {
+    result: 'paused',
+    at: T0,
+    notConfident: {},
+    confident: [],
+  };
+  const inCheck = (check: CheckState) =>
+    p.remote((d) => {
+      d.getMap('session').set('mode', 'confidence');
+      d.getMap('session').set('check', check);
+    });
+  /** Requests sent after the `hello` that every (re)connect sends first. */
+  const requests = () => p.sendMessage.mock.calls.map(([m]) => m).slice(1);
+
+  beforeEach(() => join());
+
+  it('SVC-REQ-01: start / cancel / next name the round the client saw', () => {
+    expect(p.sendMessage.mock.calls[0]).toEqual([
+      JSON.stringify({ type: 'hello', clientId: p.doc.clientID }),
+    ]);
+    inCheck(running(3));
+    svc.startCheck();
+    svc.cancelCheck();
+    svc.nextItem();
+    expect(requests()).toEqual([
+      '{"type":"check","action":"start","round":3}',
+      '{"type":"check","action":"cancel","round":3}',
+      '{"type":"check","action":"next","round":3}',
+    ]);
+  });
+
+  it('SVC-REQ-02: nothing is sent while disconnected', () => {
+    p.status('disconnected');
+    svc.startCheck();
+    expect(requests()).toEqual([]);
+  });
+
+  it('SVC-REQ-03: skip sends the request and shows a notice for 4 s', () => {
+    inCheck(running(3, { outcome: PAUSED_OUTCOME }));
+    svc.skipItem();
+    expect(requests()).toEqual(['{"type":"check","action":"skip","round":3}']);
+    expect(svc.skipNotice()).toBe('Skipped. Recorded as not confident.');
+    vi.advanceTimersByTime(3999);
+    expect(svc.skipNotice()).not.toBeNull();
+    vi.advanceTimersByTime(1);
+    expect(svc.skipNotice()).toBeNull();
+  });
+
+  it('SVC-REQ-04: a second skip restarts the notice timer', () => {
+    inCheck(running(3, { outcome: PAUSED_OUTCOME }));
+    svc.skipItem();
+    vi.advanceTimersByTime(3000);
+    svc.skipItem();
+    vi.advanceTimersByTime(3999);
+    expect(svc.skipNotice()).not.toBeNull();
+    vi.advanceTimersByTime(1);
+    expect(svc.skipNotice()).toBeNull();
+  });
+
+  it('SVC-REQ-05: no notice when the skip could not be sent', () => {
+    inCheck(running(3, { outcome: PAUSED_OUTCOME }));
+    p.status('disconnected');
+    svc.skipItem();
+    expect(svc.skipNotice()).toBeNull();
+    p.status('connected');
+    p.sendMessage.mockImplementation(() => {
+      throw new Error('socket closed');
+    });
+    svc.skipItem();
+    expect(svc.skipNotice()).toBeNull();
+  });
+
+  it('SVC-REQ-06: skip is only sent from a pause', () => {
+    inCheck(running(3));
+    svc.skipItem();
+    expect(requests()).toEqual([]);
+    expect(svc.skipNotice()).toBeNull();
+  });
+
+  it('SVC-REQ-07: mode requests, except for the current mode or while checking', () => {
+    svc.setMode('confidence');
+    expect(requests()).toEqual(['{"type":"mode","mode":"confidence","round":0}']);
+    svc.setMode('points');
+    expect(requests()).toHaveLength(1);
+    inCheck(running(2));
+    svc.setMode('points');
+    expect(requests()).toHaveLength(1);
+  });
+
+  it('SVC-REQ-08: confident writes the round, not confident removes it', () => {
+    inCheck(running(5));
+    svc.setConfident(true);
+    expect(p.doc.getMap('confidence').toJSON()).toEqual({ me: 5 });
+    expect(svc.amConfident()).toBe(true);
+    svc.setConfident(false);
+    expect(p.doc.getMap('confidence').toJSON()).toEqual({});
+    expect(svc.amConfident()).toBe(false);
+  });
+
+  it.each([
+    ['disconnected', () => p.status('disconnected')],
+    ['an observer', () => svc.toggleObserver()],
+    ['paused', () => inCheck(running(5, { outcome: PAUSED_OUTCOME }))],
+  ])('SVC-REQ-09: confident does nothing when %s', (_label, arrange) => {
+    inCheck(running(5));
+    arrange();
+    svc.setConfident(true);
+    expect(p.doc.getMap('confidence').toJSON()).toEqual({});
+  });
 });
 
 describe('server messages', () => {

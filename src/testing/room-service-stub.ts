@@ -48,6 +48,13 @@ export function createRoomServiceStub() {
     deleteHistoryEntry: vi.fn<(timestamp: number) => void>(),
     toggleObserver: vi.fn<() => void>(),
     setMode: vi.fn<(mode: RoomMode) => void>(),
+    startCheck: vi.fn<() => void>(),
+    cancelCheck: vi.fn<() => void>(),
+    skipItem: vi.fn<() => void>(),
+    nextItem: vi.fn<() => void>(),
+    setConfident: vi.fn<(confident: boolean) => void>(),
+    updateStoryName: vi.fn<(name: string) => void>(),
+    updateItemUrl: vi.fn<(url: string) => void>(),
   };
 }
 

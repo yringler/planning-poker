@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
-import { D, T0 } from './test/clock';
+import { D, flush, T0 } from './test/clock';
 import { FakeStorage } from './test/fake-storage';
-import { createHarness, internals, type Harness } from './test/harness';
+import { asConn, createHarness, internals, type Harness } from './test/harness';
+import { FakeConnection } from './test/fake-partyserver';
 import {
   cancel,
   CONFIDENT,
@@ -773,5 +774,72 @@ describe('default fetch', () => {
     const fetchFn = worker.fetch as (r: Request, env: unknown) => Promise<Response>;
     const res = await fetchFn(new Request('http://x/unknown'), {});
     expect(res.status).toBe(404);
+  });
+});
+
+// The confidence buttons' requests travel as y-partyserver custom messages: the provider
+// sends `__YPS:<json>` and YServer.handleMessage routes it to onCustomMessage. These go
+// through that real routing (onMessage) instead of calling onCustomMessage directly.
+describe('click path over the wire', () => {
+  const wire = (msg: object): string => `__YPS:${JSON.stringify(msg)}`;
+
+  it('SRV-WIRE-01: a connecting client is sent the server time', () => {
+    const conn = h.addConnection();
+    expect(conn.custom()).toEqual([time(T0)]);
+  });
+
+  it('SRV-WIRE-02: mode, start and confident over the wire confirm the item', async () => {
+    const ann = await h.addPlayer('p1', 'Ann');
+    const send = async (msg: object): Promise<void> => {
+      h.server.onMessage(asConn(ann.conn), wire(msg));
+      await flush();
+    };
+    await send({ type: 'hello', clientId: ann.clientId });
+    await send(mode('confidence', 0));
+    expect(h.session.get('mode')).toBe('confidence');
+    await h.clientWrite(() => h.session.set('storyName', 'Item A'));
+    await send(start(0));
+    expect(h.phase()).toBe('checking');
+    expect(h.check()).toMatchObject({ round: 1, startedAt: T0 });
+    await h.setConfident('p1', 1);
+    expect(h.phase()).toBe('confident');
+    expect(h.check().outcome).toMatchObject({ result: 'confident', confident: ['p1'] });
+  });
+});
+
+// The Worker deployed before confidence checks (party/server.ts at 898e254) was a bare
+// YServer. It never sends `time` and drops every custom message, so every confidence
+// request is silently lost. That is what "the button doesn't do anything" looks like.
+describe('a Worker from before confidence checks', () => {
+  async function legacyServer() {
+    const { YServer } = await import('y-partyserver');
+    class LegacyPoker extends YServer {}
+    type Args = ConstructorParameters<typeof LegacyPoker>;
+    type Conn = Parameters<LegacyPoker['onMessage']>[0];
+    type Ctx = Parameters<LegacyPoker['onConnect']>[1];
+    const server = new LegacyPoker(
+      { storage: new FakeStorage(), id: { name: 'planning-poker-OLD' } } as unknown as Args[0],
+      {} as Args[1],
+    );
+    await server.onStart();
+    const fake = new FakeConnection('c1');
+    const conn = fake as unknown as Conn;
+    (server as unknown as { connections: Map<string, FakeConnection> }).connections.set('c1', fake);
+    server.onConnect(conn, { request: new Request('http://x') } as unknown as Ctx);
+    return { server, fake, conn };
+  }
+
+  it('SRV-LEGACY-01: sends no time and drops a mode request', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { server, fake, conn } = await legacyServer();
+    expect(fake.custom()).toEqual([]);
+    server.onMessage(conn, `__YPS:${JSON.stringify(mode('confidence', 0))}`);
+    await flush();
+    expect(server.document.getMap('session').get('mode')).toBeUndefined();
+    expect(fake.custom()).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('onCustomMessage is not implemented'),
+      expect.any(String),
+    );
   });
 });
