@@ -99,16 +99,15 @@ import { RoomService } from '../../services/room.service';
         } @else {
           <span class="status-text">
             @if (allVoted()) {
-              <wa-icon name="circle-check" style="color: var(--wa-color-success-fill-loud)"></wa-icon>
+              <wa-icon
+                name="circle-check"
+                style="color: var(--wa-color-success-fill-loud)"
+              ></wa-icon>
             }
             {{ statusMessage() }}
           </span>
           <div slot="end" class="wa-cluster wa-gap-s">
-            <wa-button
-              variant="brand"
-              appearance="filled"
-              (click)="revealAndCopy()"
-            >
+            <wa-button variant="brand" appearance="filled" (click)="revealAndCopy()">
               <wa-icon slot="start" name="eye"></wa-icon>
               Reveal Votes
             </wa-button>

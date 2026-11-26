@@ -24,7 +24,11 @@ import { parseTicketUrl } from '../confidence-check/ticket-url';
                     (keydown.enter)="saveEdit(entry.timestamp)"
                     (keydown.escape)="cancelEdit()"
                   ></wa-input>
-                  <wa-icon name="check" class="action-icon save" (click)="saveEdit(entry.timestamp)"></wa-icon>
+                  <wa-icon
+                    name="check"
+                    class="action-icon save"
+                    (click)="saveEdit(entry.timestamp)"
+                  ></wa-icon>
                   <wa-icon name="xmark" class="action-icon cancel" (click)="cancelEdit()"></wa-icon>
                 </div>
               } @else {
@@ -41,12 +45,20 @@ import { parseTicketUrl } from '../confidence-check/ticket-url';
                       <wa-icon name="link"></wa-icon>
                     </a>
                   }
-                  <wa-icon name="pencil" class="action-icon edit" (click)="startEdit(entry.timestamp, entry.story || '')"></wa-icon>
-                  <wa-icon name="trash" class="action-icon delete" (click)="deleteEntry(entry.timestamp)"></wa-icon>
+                  <wa-icon
+                    name="pencil"
+                    class="action-icon edit"
+                    (click)="startEdit(entry.timestamp, entry.story || '')"
+                  ></wa-icon>
+                  <wa-icon
+                    name="trash"
+                    class="action-icon delete"
+                    (click)="deleteEntry(entry.timestamp)"
+                  ></wa-icon>
                 </div>
               }
               <div class="meta">
-                <span class="timestamp">{{ entry.timestamp | date:'M/d/yyyy h:mm a' }}</span>
+                <span class="timestamp">{{ entry.timestamp | date: 'M/d/yyyy h:mm a' }}</span>
                 @if (entry.kind === 'confidence') {
                   @if (entry.result === 'confident') {
                     <wa-tag variant="success" appearance="filled" size="small">Confident</wa-tag>
@@ -113,7 +125,9 @@ import { parseTicketUrl } from '../confidence-check/ticket-url';
     .action-icon {
       cursor: pointer;
       font-size: 0.8rem;
-      transition: color 0.15s, opacity 0.15s;
+      transition:
+        color 0.15s,
+        opacity 0.15s;
     }
 
     .story-wrap .action-icon {

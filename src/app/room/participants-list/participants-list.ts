@@ -16,7 +16,11 @@ import { RoomService } from '../../services/room.service';
             [class.revealed]="statusClass(player.peerId) === 'revealed'"
             [class.offline]="player.offline"
           >
-            <wa-avatar [initials]="initials(player.name)" shape="rounded" style="--size: 2rem"></wa-avatar>
+            <wa-avatar
+              [initials]="initials(player.name)"
+              shape="rounded"
+              style="--size: 2rem"
+            ></wa-avatar>
             <span class="name">{{ player.name }}</span>
             @if (player.offline) {
               <wa-tag variant="neutral" appearance="outlined" size="small" title="Left the session">
@@ -53,7 +57,12 @@ import { RoomService } from '../../services/room.service';
                   <wa-icon name="check"></wa-icon> Voted
                 </wa-tag>
               } @else {
-                <wa-tag variant="brand" appearance="filled" size="small" style="font-size: 1rem; font-weight: 700">
+                <wa-tag
+                  variant="brand"
+                  appearance="filled"
+                  size="small"
+                  style="font-size: 1rem; font-weight: 700"
+                >
                   {{ statusText(player.peerId) }}
                 </wa-tag>
               }
@@ -81,7 +90,9 @@ import { RoomService } from '../../services/room.service';
       background: var(--wa-color-surface-raised);
       border-radius: var(--wa-border-radius-m);
       border: 1px solid var(--wa-color-neutral-stroke-quiet);
-      transition: border-color 0.15s, background 0.15s;
+      transition:
+        border-color 0.15s,
+        background 0.15s;
     }
 
     .participant.me {

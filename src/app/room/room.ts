@@ -77,7 +77,9 @@ import { ConfidenceCheckComponent } from './confidence-check/confidence-check';
                 [attr.appearance]="room.mode() === m.value ? 'filled' : 'outlined'"
                 role="radio"
                 [attr.aria-checked]="room.mode() === m.value"
-                [attr.disabled]="room.checkPhase() === 'checking' || !room.canRequestChecks() ? '' : null"
+                [attr.disabled]="
+                  room.checkPhase() === 'checking' || !room.canRequestChecks() ? '' : null
+                "
                 (click)="room.setMode(m.value)"
               >
                 {{ m.label }}

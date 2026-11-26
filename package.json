@@ -10,7 +10,9 @@
     "test": "ng test --watch=false && npm run test:party",
     "test:app": "ng test",
     "test:party": "tsc -p party/tsconfig.spec.json && vitest run --config party/vitest.config.ts",
-    "deploy:party": "wrangler deploy"
+    "deploy:party": "wrangler deploy",
+    "format": "prettier --write \"src/**/*.{ts,html,css,scss}\" \"party/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.{ts,html,css,scss}\" \"party/**/*.ts\""
   },
   "prettier": {
     "printWidth": 100,
@@ -52,6 +54,7 @@
     "@types/node": "~22.19.0",
     "concurrently": "^9.2.1",
     "jsdom": "~27.4.0",
+    "prettier": "3.8.1",
     "typescript": "~5.9.2",
     "vitest": "~4.1.12",
     "wrangler": "^4.154.0",

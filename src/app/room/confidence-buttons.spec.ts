@@ -38,8 +38,10 @@ beforeEach(() => {
   sessionStorage.clear();
   localStorage.setItem('pp-name', 'Ann');
   localStorage.setItem('pp-peer-id', 'me');
-  vi.spyOn(RoomComponent.prototype as unknown as { fireConfetti(): void }, 'fireConfetti')
-    .mockImplementation(() => undefined);
+  vi.spyOn(
+    RoomComponent.prototype as unknown as { fireConfetti(): void },
+    'fireConfetti',
+  ).mockImplementation(() => undefined);
 });
 
 afterEach(() => vi.restoreAllMocks());
@@ -242,9 +244,7 @@ describe('with the real RoomService', () => {
   it('CLICK-REAL-03: an outdated Worker: the mode button is disabled and says why', () => {
     connect({ serverSendsTime: false });
     expect(button(el, 'Confidence check').hasAttribute('disabled')).toBe(true);
-    expect(el.querySelector('[data-testid="server-outdated"]')?.textContent).toContain(
-      'server',
-    );
+    expect(el.querySelector('[data-testid="server-outdated"]')?.textContent).toContain('server');
   });
 
   it('CLICK-REAL-04: an outdated Worker: Start check is disabled', () => {

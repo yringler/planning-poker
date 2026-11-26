@@ -189,7 +189,11 @@ export class RoomService {
     // Set awareness
     const savedObserver = localStorage.getItem('pp-observer') === 'true';
     this.isObserver.set(savedObserver);
-    this.provider.awareness.setLocalState({ name: playerName, peerId, observer: savedObserver || undefined });
+    this.provider.awareness.setLocalState({
+      name: playerName,
+      peerId,
+      observer: savedObserver || undefined,
+    });
 
     const sessionMap = this.doc.getMap('session');
     const votesMap = this.doc.getMap('votes');
@@ -229,7 +233,9 @@ export class RoomService {
       this.phase.set((sessionMap.get('phase') as 'voting' | 'revealed') ?? 'voting');
       this.timerDuration.set((sessionMap.get('timerDuration') as number) ?? 60);
       this.timerEndTime.set((sessionMap.get('timerEndTime') as number) ?? null);
-      this.timerState.set((sessionMap.get('timerState') as 'idle' | 'running' | 'paused') ?? 'idle');
+      this.timerState.set(
+        (sessionMap.get('timerState') as 'idle' | 'running' | 'paused') ?? 'idle',
+      );
       this.timerRemainingOnPause.set((sessionMap.get('timerRemainingOnPause') as number) ?? 0);
       this.timerVisible.set((sessionMap.get('timerVisible') as boolean) ?? false);
       this.mode.set(sessionMap.get(MODE_KEY) === 'confidence' ? 'confidence' : 'points');
@@ -365,7 +371,7 @@ export class RoomService {
       const name = this.peerNames()[peerId];
       if (name) playerNames[peerId] = name;
     });
-    this.uniquePlayers().forEach(p => {
+    this.uniquePlayers().forEach((p) => {
       if (!p.offline) playerNames[p.peerId] = p.name;
     });
 
@@ -375,12 +381,14 @@ export class RoomService {
     });
 
     this.doc.transact(() => {
-      historyArray.insert(0, [{
-        story: (sessionMap.get('storyName') as string) || '',
-        timestamp: Date.now(),
-        votes: currentVotes,
-        players: playerNames,
-      }]);
+      historyArray.insert(0, [
+        {
+          story: (sessionMap.get('storyName') as string) || '',
+          timestamp: Date.now(),
+          votes: currentVotes,
+          players: playerNames,
+        },
+      ]);
       sessionMap.set('phase', 'revealed');
     });
     this.resetTimer();
@@ -390,7 +398,7 @@ export class RoomService {
     if (!this.doc) return;
     const historyArray = this.doc.getArray<HistoryEntry>('history');
     const entries = historyArray.toArray();
-    const index = entries.findIndex(e => e.timestamp === timestamp);
+    const index = entries.findIndex((e) => e.timestamp === timestamp);
     if (index === -1) return;
     const updated = { ...entries[index], story: newStory };
     this.doc.transact(() => {
@@ -402,7 +410,7 @@ export class RoomService {
   deleteHistoryEntry(timestamp: number): void {
     if (!this.doc) return;
     const historyArray = this.doc.getArray<HistoryEntry>('history');
-    const index = historyArray.toArray().findIndex(e => e.timestamp === timestamp);
+    const index = historyArray.toArray().findIndex((e) => e.timestamp === timestamp);
     if (index === -1) return;
     this.doc.transact(() => historyArray.delete(index, 1));
   }
@@ -412,7 +420,7 @@ export class RoomService {
     this.doc.transact(() => {
       const votesMap = this.doc!.getMap('votes');
       const keys = Array.from(votesMap.keys());
-      keys.forEach(k => votesMap.delete(k));
+      keys.forEach((k) => votesMap.delete(k));
       this.doc!.getMap('session').set('phase', 'voting');
     });
     this.resetTimer();
@@ -426,7 +434,7 @@ export class RoomService {
     this.doc.transact(() => {
       // Clear votes
       const keys = Array.from(votesMap.keys());
-      keys.forEach(k => votesMap.delete(k));
+      keys.forEach((k) => votesMap.delete(k));
 
       // Reset
       sessionMap.set('phase', 'voting');
@@ -491,10 +499,7 @@ export class RoomService {
           sessionMap.set('timerEndTime', endTime + delta * 1000);
         }
       } else if (this.timerState() === 'paused') {
-        sessionMap.set(
-          'timerRemainingOnPause',
-          Math.max(0, this.timerRemainingOnPause() + delta),
-        );
+        sessionMap.set('timerRemainingOnPause', Math.max(0, this.timerRemainingOnPause() + delta));
       }
     });
   }

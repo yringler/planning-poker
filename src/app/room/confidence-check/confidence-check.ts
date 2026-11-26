@@ -88,8 +88,8 @@ import { parseTicketUrl } from './ticket-url';
               <wa-callout variant="neutral" size="small">
                 <wa-icon slot="icon" name="eye-slash"></wa-icon>
                 @if (total() > 1) {
-                  Votes are anonymous until time runs out. If anyone is still not confident at
-                  0:00, their names are shown.
+                  Votes are anonymous until time runs out. If anyone is still not confident at 0:00,
+                  their names are shown.
                 } @else {
                   If you're still not confident at 0:00, the check pauses for discussion.
                 }
