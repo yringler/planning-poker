@@ -7,6 +7,8 @@ export interface Player {
   name: string;
   peerId: string;
   observer?: boolean;
+  /** True for a player who left the room but whose vote is kept for this round. */
+  offline?: boolean;
 }
 
 export interface HistoryEntry {
@@ -26,6 +28,8 @@ export class RoomService {
   readonly phase = signal<'voting' | 'revealed'>('voting');
   readonly votes = signal<Record<string, string>>({});
   private readonly players = signal<Player[]>([]);
+  /** peerId → last known display name, persisted in Yjs so departed voters stay labeled. */
+  private readonly peerNames = signal<Record<string, string>>({});
   readonly timerDuration = signal(60);
   readonly timerEndTime = signal<number | null>(null);
   readonly timerState = signal<'idle' | 'running' | 'paused'>('idle');
@@ -33,23 +37,33 @@ export class RoomService {
   readonly timerVisible = signal(false);
   readonly uniquePlayers = computed(() => {
     const votes = this.votes();
+    const names = this.peerNames();
+    const online = this.players();
+    const onlineIds = new Set(online.map((p) => p.peerId));
+    // Players who voted and then left: keep them (and their vote) until the round is cleared
+    const departed: Player[] = Object.keys(votes)
+      .filter((peerId) => !onlineIds.has(peerId))
+      .map((peerId) => ({ name: names[peerId] ?? 'Unknown', peerId, offline: true }));
+
     const seen = new Map<string, Player>();
-    for (const p of this.players()) {
+    for (const p of [...online, ...departed]) {
       const existing = seen.get(p.name);
-      // Prefer the entry that has voted; otherwise last one wins
+      // Prefer the entry that has voted; otherwise the first (online before departed) wins
       if (!existing || (!votes[existing.peerId] && votes[p.peerId])) {
         seen.set(p.name, p);
       }
     }
     return Array.from(seen.values());
   });
+  readonly onlineCount = computed(() => this.uniquePlayers().filter((p) => !p.offline).length);
   private readonly history = signal<HistoryEntry[]>([]);
   readonly myPeerId = signal('');
   readonly connected = signal(false);
   readonly isObserver = signal(false);
 
   readonly resolvedHistory = computed(() => {
-    const currentPlayers = this.uniquePlayers();
+    const currentPlayers = this.uniquePlayers().filter((p) => !p.offline);
+    const names = this.peerNames();
     const history = this.history();
 
     const onlineNameCount = new Map<string, number>();
@@ -62,6 +76,10 @@ export class RoomService {
 
       for (const peerId of Object.keys(entry.votes)) {
         if (resolvedPlayers[peerId]) continue;
+        if (names[peerId]) {
+          resolvedPlayers[peerId] = names[peerId];
+          continue;
+        }
 
         for (const p of currentPlayers) {
           if (onlineNameCount.get(p.name) !== 1) continue;
@@ -102,10 +120,14 @@ export class RoomService {
 
     const sessionMap = this.doc.getMap('session');
     const votesMap = this.doc.getMap('votes');
+    const namesMap = this.doc.getMap<string>('names');
     const historyArray = this.doc.getArray<HistoryEntry>('history');
 
     // Initialize session if empty
     this.doc.transact(() => {
+      if (namesMap.get(peerId) !== playerName) {
+        namesMap.set(peerId, playerName);
+      }
       if (!sessionMap.has('phase')) {
         sessionMap.set('phase', 'voting');
       }
@@ -146,6 +168,13 @@ export class RoomService {
     };
     votesMap.observe(syncVotes);
     syncVotes();
+
+    // Observe peer names
+    const syncNames = () => {
+      this.peerNames.set(namesMap.toJSON() as Record<string, string>);
+    };
+    namesMap.observe(syncNames);
+    syncNames();
 
     // Observe history
     const syncHistory = () => {
@@ -189,6 +218,7 @@ export class RoomService {
     this.connected.set(false);
     this.isObserver.set(false);
     this.players.set([]);
+    this.peerNames.set({});
     this.votes.set({});
     this.history.set([]);
     this.phase.set('voting');
@@ -232,8 +262,12 @@ export class RoomService {
     const historyArray = this.doc.getArray<HistoryEntry>('history');
 
     const playerNames: Record<string, string> = {};
+    votesMap.forEach((_, peerId) => {
+      const name = this.peerNames()[peerId];
+      if (name) playerNames[peerId] = name;
+    });
     this.uniquePlayers().forEach(p => {
-      playerNames[p.peerId] = p.name;
+      if (!p.offline) playerNames[p.peerId] = p.name;
     });
 
     const currentVotes: Record<string, string> = {};

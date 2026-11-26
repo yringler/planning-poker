@@ -14,9 +14,15 @@ import { RoomService } from '../../services/room.service';
             [class.me]="player.peerId === room.myPeerId()"
             [class.voted]="statusClass(player.peerId) === 'voted'"
             [class.revealed]="statusClass(player.peerId) === 'revealed'"
+            [class.offline]="player.offline"
           >
             <wa-avatar [initials]="initials(player.name)" shape="rounded" style="--size: 2rem"></wa-avatar>
             <span class="name">{{ player.name }}</span>
+            @if (player.offline) {
+              <wa-tag variant="neutral" appearance="outlined" size="small" title="Left the session">
+                Left
+              </wa-tag>
+            }
             <span class="status-badge">
               @if (player.observer) {
                 <wa-tag variant="neutral" appearance="outlined" size="small">
@@ -72,6 +78,10 @@ import { RoomService } from '../../services/room.service';
 
     .participant.revealed {
       border-color: var(--wa-color-brand-stroke-loud);
+    }
+
+    .participant.offline {
+      opacity: 0.6;
     }
 
     .name {
