@@ -1,6 +1,7 @@
-import { Injectable, signal, computed, DestroyRef, inject } from '@angular/core';
+import { Injectable, InjectionToken, signal, computed, DestroyRef, inject } from '@angular/core';
 import * as Y from 'yjs';
 import YProvider from 'y-partyserver/provider';
+import type { Awareness } from 'y-protocols/awareness';
 import { environment } from '../../environments/environment';
 import {
   CHECK_KEY,
@@ -8,21 +9,46 @@ import {
   ITEM_URL_KEY,
   MODE_KEY,
   checkPhase,
+  normaliseCheck,
+  parseServerMessage,
   type CheckAction,
   type CheckState,
   type ClientMessage,
   type HistoryEntry,
   type RoomMode,
-  type ServerMessage,
 } from '../shared/confidence-protocol';
+import {
+  confidencePlayers,
+  confidentIdsForRound,
+  pointPlayers,
+  resolveHistory,
+  type Player,
+} from './room-logic';
 
-export interface Player {
-  name: string;
-  peerId: string;
-  observer?: boolean;
-  /** True for a player who left the room but whose vote is kept for this round. */
-  offline?: boolean;
+export type { Player } from './room-logic';
+
+/** The parts of y-partyserver's `YProvider` that RoomService uses. */
+export interface ProviderLike {
+  readonly awareness: Awareness;
+  on(event: 'status', cb: (e: { status: string }) => void): void;
+  on(event: 'synced', cb: (synced: boolean) => void): void;
+  on(event: 'custom-message', cb: (raw: string) => void): void;
+  sendMessage(msg: string): void;
+  destroy(): void;
 }
+
+export type YProviderFactory = (
+  host: string,
+  room: string,
+  doc: Y.Doc,
+  opts: { party: string },
+) => ProviderLike;
+
+/** Creates the realtime provider; tests swap in a fake that opens no WebSocket. */
+export const Y_PROVIDER_FACTORY = new InjectionToken<YProviderFactory>('Y_PROVIDER_FACTORY', {
+  providedIn: 'root',
+  factory: () => (host, room, doc, opts) => new YProvider(host, room, doc, opts),
+});
 
 export type {
   CheckAttempt,
@@ -37,8 +63,9 @@ export { CHECK_DURATION_MS } from '../shared/confidence-protocol';
 @Injectable({ providedIn: 'root' })
 export class RoomService {
   private doc: Y.Doc | null = null;
-  private provider: YProvider | null = null;
+  private provider: ProviderLike | null = null;
   private destroyRef = inject(DestroyRef);
+  private createProvider = inject(Y_PROVIDER_FACTORY);
 
   readonly storyName = signal('');
   readonly phase = signal<'voting' | 'revealed'>('voting');
@@ -72,66 +99,31 @@ export class RoomService {
   private skipNoticeTimer: ReturnType<typeof setTimeout> | null = null;
   /** True when this client first saw the current round already running (joined mid-check). */
   readonly joinedMidCheck = signal(false);
+  /** The current round as this tab first saw it (see `trackMidCheckJoin`). */
+  private midCheckSeen: SeenCheck | null = null;
   private roomCode = '';
 
   /** peerIds confident in the current round (values from older rounds are ignored). */
-  readonly confidentIds = computed(() => {
-    const round = this.checkRound();
-    const raw = this.confidenceRaw();
-    return new Set(Object.keys(raw).filter((id) => raw[id] === round));
-  });
+  readonly confidentIds = computed(() =>
+    confidentIdsForRound(this.confidenceRaw(), this.checkRound()),
+  );
 
   readonly uniquePlayers = computed(() =>
     this.mode() === 'confidence' ? this.confidencePlayers() : this.pointPlayers(),
   );
 
   /** Point voting: deduped by name, keeping departed voters until the round is cleared. */
-  private readonly pointPlayers = computed(() => {
-    const votes = this.votes();
-    const names = this.peerNames();
-    const online = this.players();
-    const onlineIds = new Set(online.map((p) => p.peerId));
-    // Players who voted and then left: keep them (and their vote) until the round is cleared
-    const departed: Player[] = Object.keys(votes)
-      .filter((peerId) => !onlineIds.has(peerId))
-      .map((peerId) => ({ name: names[peerId] ?? 'Unknown', peerId, offline: true }));
-
-    const seen = new Map<string, Player>();
-    for (const p of [...online, ...departed]) {
-      const existing = seen.get(p.name);
-      // Prefer the entry that has voted; otherwise the first (online before departed) wins
-      if (!existing || (!votes[existing.peerId] && votes[p.peerId])) {
-        seen.set(p.name, p);
-      }
-    }
-    return Array.from(seen.values());
-  });
+  private readonly pointPlayers = computed(() =>
+    pointPlayers(this.players(), this.votes(), this.peerNames()),
+  );
 
   /**
    * Confidence check: deduped by peerId (same as the server's count), so two people with the
    * same name both count. In a pause, revealed not-confident players who left stay listed.
    */
-  private readonly confidencePlayers = computed(() => {
-    const names = this.peerNames();
-    const byPeer = new Map<string, Player>();
-    for (const p of this.players()) {
-      const existing = byPeer.get(p.peerId);
-      // Several tabs of one browser: observer in any tab wins (matches the server)
-      byPeer.set(
-        p.peerId,
-        existing ? { ...existing, observer: existing.observer || p.observer } : p,
-      );
-    }
-    const outcome = this.checkOutcome();
-    if (this.checkPhase() === 'paused' && outcome) {
-      for (const [peerId, name] of Object.entries(outcome.notConfident)) {
-        if (!byPeer.has(peerId)) {
-          byPeer.set(peerId, { name: names[peerId] ?? name, peerId, offline: true });
-        }
-      }
-    }
-    return Array.from(byPeer.values());
-  });
+  private readonly confidencePlayers = computed(() =>
+    confidencePlayers(this.players(), this.peerNames(), this.checkPhase(), this.checkOutcome()),
+  );
   readonly onlineCount = computed(() => this.uniquePlayers().filter((p) => !p.offline).length);
 
   /** Who a confidence check counts: connected non-observers (confidence mode: by peerId). */
@@ -146,47 +138,24 @@ export class RoomService {
   private readonly history = signal<HistoryEntry[]>([]);
   readonly myPeerId = signal('');
   readonly connected = signal(false);
+  /**
+   * The server has sent its clock (`time`), so it handles confidence-check requests. A Worker
+   * deployed before confidence checks never sends one and silently drops the requests.
+   */
+  readonly serverReady = signal(false);
+  /** Synced with a server that never sent `time`: it predates confidence checks. */
+  readonly serverOutdated = signal(false);
+  /** Confidence-check requests (mode / start / cancel / skip / next) can take effect. */
+  readonly canRequestChecks = computed(() => this.connected() && this.serverReady());
   readonly isObserver = signal(false);
 
-  readonly resolvedHistory = computed(() => {
-    const currentPlayers = this.pointPlayers().filter((p) => !p.offline);
-    const names = this.peerNames();
-    const history = this.history();
-
-    const onlineNameCount = new Map<string, number>();
-    for (const p of currentPlayers) {
-      onlineNameCount.set(p.name, (onlineNameCount.get(p.name) ?? 0) + 1);
-    }
-
-    return history.map(entry => {
-      const resolvedPlayers: Record<string, string> = { ...entry.players };
-
-      for (const peerId of Object.keys(entry.votes)) {
-        if (resolvedPlayers[peerId]) continue;
-        if (names[peerId]) {
-          resolvedPlayers[peerId] = names[peerId];
-          continue;
-        }
-
-        for (const p of currentPlayers) {
-          if (onlineNameCount.get(p.name) !== 1) continue;
-          if (p.peerId !== peerId) continue;
-
-          const oldEntry = Object.entries(entry.players).find(([, n]) => n === p.name);
-          if (!oldEntry) continue;
-
-          const [oldPeerId] = oldEntry;
-          const oldPeerOnline = currentPlayers.some(cp => cp.peerId === oldPeerId);
-          if (oldPeerOnline) continue;
-
-          resolvedPlayers[peerId] = p.name;
-          break;
-        }
-      }
-
-      return { ...entry, players: resolvedPlayers };
-    });
-  });
+  readonly resolvedHistory = computed(() =>
+    resolveHistory(
+      this.history(),
+      this.pointPlayers().filter((p) => !p.offline),
+      this.peerNames(),
+    ),
+  );
 
   connect(roomCode: string, playerName: string): void {
     this.disconnect();
@@ -198,9 +167,12 @@ export class RoomService {
     let synced = false;
 
     // `party` is the kebab-cased Durable Object binding name in wrangler.jsonc
-    this.provider = new YProvider(environment.partyHost, `planning-poker-${roomCode}`, this.doc, {
-      party: 'planning-poker',
-    });
+    this.provider = this.createProvider(
+      environment.partyHost,
+      `planning-poker-${roomCode}`,
+      this.doc,
+      { party: 'planning-poker' },
+    );
     this.provider.on('status', ({ status }: { status: string }) => {
       this.connected.set(status === 'connected');
       if (status === 'connected' && this.doc) {
@@ -208,6 +180,8 @@ export class RoomService {
       }
     });
     this.provider.on('synced', (isSynced: boolean) => {
+      // A current server sends `time` on connect, ahead of the sync reply
+      if (isSynced) this.serverOutdated.set(!this.serverReady());
       if (!isSynced || synced) return;
       synced = true;
       initSession();
@@ -217,7 +191,11 @@ export class RoomService {
     // Set awareness
     const savedObserver = localStorage.getItem('pp-observer') === 'true';
     this.isObserver.set(savedObserver);
-    this.provider.awareness.setLocalState({ name: playerName, peerId, observer: savedObserver || undefined });
+    this.provider.awareness.setLocalState({
+      name: playerName,
+      peerId,
+      observer: savedObserver || undefined,
+    });
 
     const sessionMap = this.doc.getMap('session');
     const votesMap = this.doc.getMap('votes');
@@ -257,12 +235,14 @@ export class RoomService {
       this.phase.set((sessionMap.get('phase') as 'voting' | 'revealed') ?? 'voting');
       this.timerDuration.set((sessionMap.get('timerDuration') as number) ?? 60);
       this.timerEndTime.set((sessionMap.get('timerEndTime') as number) ?? null);
-      this.timerState.set((sessionMap.get('timerState') as 'idle' | 'running' | 'paused') ?? 'idle');
+      this.timerState.set(
+        (sessionMap.get('timerState') as 'idle' | 'running' | 'paused') ?? 'idle',
+      );
       this.timerRemainingOnPause.set((sessionMap.get('timerRemainingOnPause') as number) ?? 0);
       this.timerVisible.set((sessionMap.get('timerVisible') as boolean) ?? false);
       this.mode.set(sessionMap.get(MODE_KEY) === 'confidence' ? 'confidence' : 'points');
       this.itemUrl.set((sessionMap.get(ITEM_URL_KEY) as string) ?? '');
-      this.check.set((sessionMap.get(CHECK_KEY) as CheckState) ?? null);
+      this.check.set(sessionMap.has(CHECK_KEY) ? normaliseCheck(sessionMap.get(CHECK_KEY)) : null);
       this.trackMidCheckJoin(!synced);
     };
     sessionMap.observe(syncSession);
@@ -331,6 +311,8 @@ export class RoomService {
       this.doc = null;
     }
     this.connected.set(false);
+    this.serverReady.set(false);
+    this.serverOutdated.set(false);
     this.isObserver.set(false);
     this.players.set([]);
     this.peerNames.set({});
@@ -349,6 +331,7 @@ export class RoomService {
     this.confidenceRaw.set({});
     this.serverOffset.set(0);
     this.joinedMidCheck.set(false);
+    this.midCheckSeen = null;
     if (this.skipNoticeTimer) clearTimeout(this.skipNoticeTimer);
     this.skipNoticeTimer = null;
     this.skipNotice.set(null);
@@ -391,7 +374,7 @@ export class RoomService {
       const name = this.peerNames()[peerId];
       if (name) playerNames[peerId] = name;
     });
-    this.uniquePlayers().forEach(p => {
+    this.uniquePlayers().forEach((p) => {
       if (!p.offline) playerNames[p.peerId] = p.name;
     });
 
@@ -401,12 +384,14 @@ export class RoomService {
     });
 
     this.doc.transact(() => {
-      historyArray.insert(0, [{
-        story: (sessionMap.get('storyName') as string) || '',
-        timestamp: Date.now(),
-        votes: currentVotes,
-        players: playerNames,
-      }]);
+      historyArray.insert(0, [
+        {
+          story: (sessionMap.get('storyName') as string) || '',
+          timestamp: Date.now(),
+          votes: currentVotes,
+          players: playerNames,
+        },
+      ]);
       sessionMap.set('phase', 'revealed');
     });
     this.resetTimer();
@@ -416,7 +401,7 @@ export class RoomService {
     if (!this.doc) return;
     const historyArray = this.doc.getArray<HistoryEntry>('history');
     const entries = historyArray.toArray();
-    const index = entries.findIndex(e => e.timestamp === timestamp);
+    const index = entries.findIndex((e) => e.timestamp === timestamp);
     if (index === -1) return;
     const updated = { ...entries[index], story: newStory };
     this.doc.transact(() => {
@@ -428,7 +413,7 @@ export class RoomService {
   deleteHistoryEntry(timestamp: number): void {
     if (!this.doc) return;
     const historyArray = this.doc.getArray<HistoryEntry>('history');
-    const index = historyArray.toArray().findIndex(e => e.timestamp === timestamp);
+    const index = historyArray.toArray().findIndex((e) => e.timestamp === timestamp);
     if (index === -1) return;
     this.doc.transact(() => historyArray.delete(index, 1));
   }
@@ -438,7 +423,7 @@ export class RoomService {
     this.doc.transact(() => {
       const votesMap = this.doc!.getMap('votes');
       const keys = Array.from(votesMap.keys());
-      keys.forEach(k => votesMap.delete(k));
+      keys.forEach((k) => votesMap.delete(k));
       this.doc!.getMap('session').set('phase', 'voting');
     });
     this.resetTimer();
@@ -452,7 +437,7 @@ export class RoomService {
     this.doc.transact(() => {
       // Clear votes
       const keys = Array.from(votesMap.keys());
-      keys.forEach(k => votesMap.delete(k));
+      keys.forEach((k) => votesMap.delete(k));
 
       // Reset
       sessionMap.set('phase', 'voting');
@@ -509,17 +494,19 @@ export class RoomService {
     if (!this.doc) return;
     const sessionMap = this.doc.getMap('session');
     const newDuration = Math.max(10, this.timerDuration() + delta);
+    // Shift the countdown by what the duration actually changed, not the requested delta
+    const applied = newDuration - this.timerDuration();
     this.doc.transact(() => {
       sessionMap.set('timerDuration', newDuration);
       if (this.timerState() === 'running') {
         const endTime = this.timerEndTime();
         if (endTime) {
-          sessionMap.set('timerEndTime', endTime + delta * 1000);
+          sessionMap.set('timerEndTime', endTime + applied * 1000);
         }
       } else if (this.timerState() === 'paused') {
         sessionMap.set(
           'timerRemainingOnPause',
-          Math.max(0, this.timerRemainingOnPause() + delta),
+          Math.max(0, this.timerRemainingOnPause() + applied),
         );
       }
     });
@@ -593,15 +580,12 @@ export class RoomService {
   }
 
   private onServerMessage(raw: string): void {
-    let msg: ServerMessage;
-    try {
-      msg = JSON.parse(raw) as ServerMessage;
-    } catch {
-      return;
-    }
-    if (msg.type === 'time' && typeof msg.now === 'number') {
+    const msg = parseServerMessage(raw);
+    if (msg?.type === 'time') {
       // Ignores one-way latency (tens of ms), which is fine for a 1-minute countdown
       this.serverOffset.set(msg.now - Date.now());
+      this.serverReady.set(true);
+      this.serverOutdated.set(false);
     }
   }
 
@@ -616,12 +600,8 @@ export class RoomService {
     }
     const key = `pp-check-seen-${this.roomCode}`;
     const round = this.checkRound();
-    let seen: { round: number; mid: boolean } | null = null;
-    try {
-      seen = JSON.parse(sessionStorage.getItem(key) ?? 'null');
-    } catch {
-      seen = null;
-    }
+    // Memory covers this tab even when storage is unavailable; storage covers reloads
+    let seen = this.midCheckSeen?.round === round ? this.midCheckSeen : readSeenCheck(key);
     if (seen?.round !== round) {
       seen = { round, mid: initialLoad };
       try {
@@ -630,6 +610,7 @@ export class RoomService {
         // Storage unavailable: the hint just may reappear after a reload
       }
     }
+    this.midCheckSeen = seen;
     this.joinedMidCheck.set(seen.mid);
   }
 
@@ -641,5 +622,24 @@ export class RoomService {
       localStorage.setItem(key, id);
     }
     return id;
+  }
+}
+
+interface SeenCheck {
+  round: number;
+  mid: boolean;
+}
+
+/** Reads this tab's stored record of a check round; null if missing, corrupt or unreadable. */
+function readSeenCheck(key: string): SeenCheck | null {
+  try {
+    const raw: unknown = JSON.parse(sessionStorage.getItem(key) ?? 'null');
+    if (typeof raw !== 'object' || raw === null) return null;
+    const { round, mid } = raw as Record<string, unknown>;
+    if (typeof round !== 'number') return null;
+    // A record without a valid `mid` still means this tab saw the round, so no hint
+    return { round, mid: mid === true };
+  } catch {
+    return null;
   }
 }

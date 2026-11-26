@@ -14,7 +14,8 @@ import { RoomService } from '../../services/room.service';
           [attr.data-selected]="selectedCard() === card ? '' : null"
           [attr.disabled]="room.phase() === 'revealed' ? '' : null"
           (click)="selectCard(card)"
-        >{{ card }}</wa-button>
+          >{{ card }}</wa-button
+        >
       }
     </div>
   `,

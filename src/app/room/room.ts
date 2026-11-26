@@ -77,14 +77,20 @@ import { ConfidenceCheckComponent } from './confidence-check/confidence-check';
                 [attr.appearance]="room.mode() === m.value ? 'filled' : 'outlined'"
                 role="radio"
                 [attr.aria-checked]="room.mode() === m.value"
-                [attr.disabled]="room.checkPhase() === 'checking' || !room.connected() ? '' : null"
+                [attr.disabled]="
+                  room.checkPhase() === 'checking' || !room.canRequestChecks() ? '' : null
+                "
                 (click)="room.setMode(m.value)"
               >
                 {{ m.label }}
               </wa-button>
             }
           </div>
-          @if (room.checkPhase() === 'checking') {
+          @if (room.serverOutdated()) {
+            <span class="mode-hint" data-testid="server-outdated">
+              Confidence checks aren't available: the server is out of date.
+            </span>
+          } @else if (room.checkPhase() === 'checking') {
             <span class="mode-hint">Finish or cancel this check to change mode</span>
           }
         </div>

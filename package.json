@@ -4,11 +4,17 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "predev": "node -e \"require('fs').mkdirSync('dist/planning-poker/browser',{recursive:true})\"",
     "dev": "concurrently \"wrangler dev\" \"ng serve\"",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test",
-    "deploy:party": "wrangler deploy"
+    "test": "ng test --watch=false && npm run test:party",
+    "test:app": "ng test",
+    "test:party": "tsc -p party/tsconfig.spec.json && vitest run --config party/vitest.config.ts",
+    "format": "prettier --write \"src/**/*.{ts,html,css,scss}\" \"party/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.{ts,html,css,scss}\" \"party/**/*.ts\"",
+    "preview": "npm run build && wrangler dev",
+    "deploy": "npm test && npm run build && wrangler deploy"
   },
   "prettier": {
     "printWidth": 100,
@@ -47,9 +53,14 @@
     "@angular/compiler-cli": "^21.1.0",
     "@cloudflare/workers-types": "^5.20261027.1",
     "@types/canvas-confetti": "^1.9.0",
+    "@types/node": "~22.19.0",
     "concurrently": "^9.2.1",
+    "jsdom": "~27.4.0",
+    "prettier": "3.8.1",
     "typescript": "~5.9.2",
-    "wrangler": "^4.154.0"
+    "vitest": "~4.1.12",
+    "wrangler": "^4.154.0",
+    "y-protocols": "~1.0.7"
   },
   "overrides": {
     "y-partyserver": {

@@ -1,26 +1,28 @@
 <!doctype html>
 <html lang="en" class="wa-theme-awesome wa-palette-bright">
-<head>
-  <meta charset="utf-8">
-  <title>PlanningPoker</title>
-  <base href="/">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" href="favicon.ico" sizes="48x48">
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<script>
-    (function() {
-      var params = new URLSearchParams(window.location.search);
-      var route = params.get('__route');
-      if (route) {
-        window.history.replaceState(null, '',
-          window.location.pathname.replace(/\/$/, '') + decodeURIComponent(route)
-        );
-      }
-    })();
-  </script>
-</head>
-<body>
-  <app-root></app-root>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <title>PlanningPoker</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var route = params.get('__route');
+        if (route) {
+          window.history.replaceState(
+            null,
+            '',
+            window.location.pathname.replace(/\/$/, '') + decodeURIComponent(route),
+          );
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <app-root></app-root>
+  </body>
 </html>

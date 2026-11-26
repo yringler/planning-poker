@@ -89,3 +89,87 @@ export interface HistoryEntry {
   /** Checks that ended paused, with who wasn't confident. */
   attempts?: CheckAttempt[];
 }
+
+/** Validation helpers shared by the server and the client. */
+export const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+export const isFiniteNumber = (v: unknown): v is number =>
+  typeof v === 'number' && Number.isFinite(v);
+const CHECK_ACTIONS: readonly CheckAction[] = ['start', 'cancel', 'skip', 'next'];
+
+/** Parses a client request; returns null for anything malformed. */
+export function parseClientMessage(raw: string): ClientMessage | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!isRecord(data)) return null;
+  if (data['type'] === 'hello') {
+    return isFiniteNumber(data['clientId']) ? { type: 'hello', clientId: data['clientId'] } : null;
+  }
+  if (!isFiniteNumber(data['round'])) return null;
+  const round = data['round'];
+  if (data['type'] === 'mode') {
+    const mode = data['mode'];
+    return mode === 'points' || mode === 'confidence' ? { type: 'mode', mode, round } : null;
+  }
+  if (data['type'] === 'check') {
+    const action = CHECK_ACTIONS.find((a) => a === data['action']);
+    return action ? { type: 'check', action, round } : null;
+  }
+  return null;
+}
+
+/** Parses a server message; returns null for anything malformed. */
+export function parseServerMessage(raw: string): ServerMessage | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!isRecord(data)) return null;
+  if (data['type'] === 'time' && isFiniteNumber(data['now'])) {
+    return { type: 'time', now: data['now'] };
+  }
+  return null;
+}
+
+/** Coerces whatever is stored in `session.check` into a valid CheckState. */
+export function normaliseCheck(value: unknown): CheckState {
+  const v = isRecord(value) ? value : {};
+  const outcome = isRecord(v['outcome']) ? v['outcome'] : null;
+  const notConfident: Record<string, string> = {};
+  if (outcome && isRecord(outcome['notConfident'])) {
+    for (const [id, name] of Object.entries(outcome['notConfident'])) {
+      if (typeof name === 'string') notConfident[id] = name;
+    }
+  }
+  return {
+    itemId: typeof v['itemId'] === 'string' ? v['itemId'] : '',
+    round: isFiniteNumber(v['round']) ? v['round'] : 0,
+    startedAt: isFiniteNumber(v['startedAt']) ? v['startedAt'] : null,
+    outcome:
+      outcome && (outcome['result'] === 'confident' || outcome['result'] === 'paused')
+        ? {
+            result: outcome['result'],
+            at: isFiniteNumber(outcome['at']) ? outcome['at'] : 0,
+            notConfident,
+            confident: Array.isArray(outcome['confident'])
+              ? outcome['confident'].filter((id): id is string => typeof id === 'string')
+              : [],
+          }
+        : null,
+    checks: isFiniteNumber(v['checks']) ? v['checks'] : 0,
+    log: Array.isArray(v['log'])
+      ? v['log'].filter(isRecord).map((a) => ({
+          check: isFiniteNumber(a['check']) ? a['check'] : 0,
+          notConfident: Array.isArray(a['notConfident'])
+            ? a['notConfident'].filter((n): n is string => typeof n === 'string')
+            : [],
+        }))
+      : [],
+  };
+}

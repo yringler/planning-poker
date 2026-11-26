@@ -4,8 +4,16 @@ import { ChartData, ChartOptions } from 'chart.js';
 import { RoomService } from '../../services/room.service';
 
 const COLORS = [
-  '#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed',
-  '#0891b2', '#be185d', '#65a30d', '#ea580c', '#4338ca',
+  '#2563eb',
+  '#16a34a',
+  '#dc2626',
+  '#d97706',
+  '#7c3aed',
+  '#0891b2',
+  '#be185d',
+  '#65a30d',
+  '#ea580c',
+  '#4338ca',
 ];
 
 @Component({
@@ -21,8 +29,16 @@ const COLORS = [
           <p class="subtitle">Each player's vote z-score (deviation ÷ std dev) per issue</p>
         </div>
         <div class="wa-cluster wa-gap-m">
-          <wa-checkbox [checked]="showZScores() || undefined" (change)="toggleZScores($any($event.target).checked)">Z-scores</wa-checkbox>
-          <wa-checkbox [checked]="showAvgAbsZ() || undefined" (change)="toggleAvgAbsZ($any($event.target).checked)">Avg |z|</wa-checkbox>
+          <wa-checkbox
+            [checked]="showZScores() || undefined"
+            (change)="toggleZScores($any($event.target).checked)"
+            >Z-scores</wa-checkbox
+          >
+          <wa-checkbox
+            [checked]="showAvgAbsZ() || undefined"
+            (change)="toggleAvgAbsZ($any($event.target).checked)"
+            >Avg |z|</wa-checkbox
+          >
         </div>
         <wa-card>
           <canvas baseChart [data]="chartData()" [options]="chartOptions" type="line"></canvas>
@@ -46,7 +62,6 @@ const COLORS = [
       margin: 0;
       opacity: 0.7;
     }
-
   `,
 })
 export class VotingDeviationChartComponent {
@@ -121,11 +136,13 @@ export class VotingDeviationChartComponent {
   readonly chartData = computed((): ChartData<'line'> => {
     const history = [...this.pointHistory()].reverse();
 
+    // Unnamed voters can't be followed across rounds, so they get no line (their votes still
+    // count towards each round's average and spread)
     const playerNames = new Set<string>();
     for (const entry of history) {
-      for (const [peerId] of Object.entries(entry.votes)) {
-        const name = entry.players[peerId] || 'Unknown';
-        playerNames.add(name);
+      for (const peerId of Object.keys(entry.votes)) {
+        const name = entry.players[peerId];
+        if (name) playerNames.add(name);
       }
     }
 

@@ -9,7 +9,9 @@ Real-time planning poker app built with Angular 21 + PartyServer on Cloudflare W
 ```bash
 npm run dev          # Run Angular dev server + local Worker (`wrangler dev`, port 8787) concurrently
 npm run build        # Production build
-npm run deploy:party # Deploy the Worker to Cloudflare (`wrangler deploy`)
+npm test             # Angular unit tests (Vitest + jsdom) + party/ server tests
+npm run preview      # Production build served by `wrangler dev` on :8787 (app + Durable Object)
+npm run deploy       # Test, build, `wrangler deploy` (normally done by Workers Builds on push to main)
 ```
 
 ## Architecture
@@ -27,8 +29,8 @@ npm run deploy:party # Deploy the Worker to Cloudflare (`wrangler deploy`)
 | `src/app/room/room.ts` | Room view + name prompt for direct link visitors |
 | `src/app/services/room.service.ts` | Core state: Yjs doc, y-partyserver provider, signals |
 | `party/server.ts` | Worker + `PlanningPoker` Durable Object (`YServer` from y-partyserver) |
-| `wrangler.jsonc` | Worker / Durable Object config |
-| `src/environments/` | Worker host config (dev vs prod) |
+| `wrangler.jsonc` | Single Worker: serves the Angular build as static assets + `/parties/*` → Durable Object |
+| `src/environments/` | Party host: `localhost:8787` in dev, same origin (`location.host`) in prod |
 
 ## Room Code Format
 
@@ -49,4 +51,5 @@ Yjs awareness tracks connected players with name + peerId.
 - Signals for reactive state (`signal()`, `computed()`)
 - `@if` / `@for` control flow syntax (Angular 17+), not `*ngIf` / `*ngFor`
 - Prettier: `printWidth: 100`, `singleQuote: true`
-- No test files currently in project
+- Specs live next to the code (`*.spec.ts`); party tests run via `party/vitest.config.ts`
+- Run `npm run format` (Prettier) before committing
