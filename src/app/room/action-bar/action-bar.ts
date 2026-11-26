@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import { Component, computed, inject, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { RoomService } from '../../services/room.service';
 
 @Component({
@@ -12,19 +12,15 @@ import { RoomService } from '../../services/room.service';
             <wa-icon name="chart-bar"></wa-icon>
             <span class="average-value">{{ averageText() }}</span>
             @if (averageValue() !== null) {
-              <wa-button
-                size="small"
-                appearance="plain"
-                [attr.title]="copied() ? 'Copied!' : 'Copy final points'"
-                (click)="copyFinalPoints()"
-              >
-                <wa-icon slot="start" [attr.name]="copied() ? 'check' : 'copy'"></wa-icon>
-                {{ copied() ? 'Copied!' : 'Copy' }}
-              </wa-button>
+              <wa-copy-button
+                [attr.value]="averageValue()"
+                copy-label="Copy final points"
+                success-label="Copied!"
+              ></wa-copy-button>
             }
           </div>
           <div slot="end" class="wa-cluster wa-gap-s">
-            <wa-button variant="brand" appearance="filled" (click)="finishRound()">
+            <wa-button variant="brand" appearance="filled" (click)="room.newRound()">
               <wa-icon slot="start" name="plus"></wa-icon>
               New Round
             </wa-button>
@@ -44,7 +40,7 @@ import { RoomService } from '../../services/room.service';
             <wa-button
               variant="brand"
               appearance="filled"
-              (click)="room.revealVotes()"
+              (click)="revealAndCopy()"
             >
               <wa-icon slot="start" name="eye"></wa-icon>
               Reveal Votes
@@ -128,26 +124,13 @@ export class ActionBarComponent {
     return value === null ? 'No numeric votes' : `Avg: ${value}`;
   });
 
-  readonly copied = signal(false);
-  private copiedTimeout: ReturnType<typeof setTimeout> | undefined;
-
-  async copyFinalPoints(): Promise<void> {
+  /** Reveals votes and copies the final points (average) to the clipboard. */
+  revealAndCopy(): void {
     const value = this.averageValue();
+    this.room.revealVotes();
     if (value === null) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      this.copied.set(true);
-      clearTimeout(this.copiedTimeout);
-      this.copiedTimeout = setTimeout(() => this.copied.set(false), 1500);
-    } catch (err) {
-      console.error('Failed to copy final points', err);
-    }
-  }
-
-  /** Finishes the round: copies the final points to the clipboard, then starts a new round. */
-  finishRound(): void {
-    // Start the clipboard write (captures the value) before votes are cleared.
-    void this.copyFinalPoints();
-    this.room.newRound();
+    navigator.clipboard
+      .writeText(value)
+      .catch((err: unknown) => console.error('Failed to copy final points', err));
   }
 }

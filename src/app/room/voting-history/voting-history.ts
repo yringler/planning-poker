@@ -38,12 +38,11 @@ import { RoomService } from '../../services/room.service';
                 <span class="average">
                   {{ calcAverage(entry.votes) }}
                   @if (averageValue(entry.votes); as value) {
-                    <wa-icon
-                      [attr.name]="copiedTimestamp() === entry.timestamp ? 'check' : 'copy'"
-                      class="action-icon copy"
-                      [attr.title]="copiedTimestamp() === entry.timestamp ? 'Copied!' : 'Copy points'"
-                      (click)="copyPoints(entry.timestamp, value)"
-                    ></wa-icon>
+                    <wa-copy-button
+                      [attr.value]="value"
+                      copy-label="Copy points"
+                      success-label="Copied!"
+                    ></wa-copy-button>
                   }
                 </span>
               </div>
@@ -113,14 +112,6 @@ import { RoomService } from '../../services/room.service';
       color: var(--wa-color-danger-fill-loud);
     }
 
-    .action-icon.copy {
-      margin-left: var(--wa-space-2xs);
-      color: var(--wa-color-neutral-on-quiet);
-    }
-    .action-icon.copy:hover {
-      color: var(--wa-color-brand-fill-loud);
-    }
-
     .action-icon.save {
       color: var(--wa-color-success-fill-loud);
     }
@@ -183,8 +174,6 @@ export class VotingHistoryComponent {
   readonly room = inject(RoomService);
   readonly editingTimestamp = signal<number | null>(null);
   readonly editingValue = signal('');
-  readonly copiedTimestamp = signal<number | null>(null);
-  private copiedTimeout: ReturnType<typeof setTimeout> | undefined;
 
   startEdit(timestamp: number, story: string): void {
     this.editingTimestamp.set(timestamp);
@@ -220,16 +209,5 @@ export class VotingHistoryComponent {
   calcAverage(votes: Record<string, string>): string {
     const value = this.averageValue(votes);
     return value === null ? 'No numeric votes' : `Avg: ${value}`;
-  }
-
-  async copyPoints(timestamp: number, value: string): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(value);
-      this.copiedTimestamp.set(timestamp);
-      clearTimeout(this.copiedTimeout);
-      this.copiedTimeout = setTimeout(() => this.copiedTimestamp.set(null), 1500);
-    } catch (err) {
-      console.error('Failed to copy points', err);
-    }
   }
 }
