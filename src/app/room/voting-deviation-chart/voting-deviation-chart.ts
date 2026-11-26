@@ -136,11 +136,13 @@ export class VotingDeviationChartComponent {
   readonly chartData = computed((): ChartData<'line'> => {
     const history = [...this.pointHistory()].reverse();
 
+    // Unnamed voters can't be followed across rounds, so they get no line (their votes still
+    // count towards each round's average and spread)
     const playerNames = new Set<string>();
     for (const entry of history) {
-      for (const [peerId] of Object.entries(entry.votes)) {
-        const name = entry.players[peerId] || 'Unknown';
-        playerNames.add(name);
+      for (const peerId of Object.keys(entry.votes)) {
+        const name = entry.players[peerId];
+        if (name) playerNames.add(name);
       }
     }
 

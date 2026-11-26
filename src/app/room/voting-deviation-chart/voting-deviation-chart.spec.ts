@@ -95,16 +95,17 @@ describe('chartData', () => {
     expect(c.chartData().datasets).toEqual([]);
   });
 
-  // BUG: src/app/room/voting-deviation-chart/voting-deviation-chart.ts:127 adds an 'Unknown'
-  // player for unnamed voters, but :137 looks peerIds up by name, so that dataset is all null.
-  it('CHART-09 (BUG): unnamed voters get an all-null dataset', () => {
+  // Unnamed voters can't be followed across rounds, so they get no line of their own (their
+  // votes still count towards each round's average and spread).
+  it('CHART-09: unnamed voters get no dataset', () => {
     const players = { p1: 'Ann' };
     rounds(R({ p9: '5', p1: '3' }, players), R({ p9: '5', p1: '3' }, players));
     const allNull = c
       .chartData()
       .datasets.filter((d) => d.data.every((v) => v === null))
       .map((d) => d.label);
-    expect(allNull).toEqual(['Unknown', 'Unknown (avg |z|)']); // BUG: should be []
+    expect(allNull).toEqual([]);
+    expect(c.chartData().datasets.map((d) => d.label)).toEqual(['Ann', 'Ann (avg |z|)']);
   });
 
   it('CHART-10: colours wrap after 10 players', () => {

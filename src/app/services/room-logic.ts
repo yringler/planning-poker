@@ -93,11 +93,12 @@ export function resolveHistory(
         if (p.peerId !== peerId) continue;
 
         const oldEntry = Object.entries(entry.players).find(([, n]) => n === p.name);
-        if (!oldEntry) continue;
-
-        const [oldPeerId] = oldEntry;
-        const oldPeerOnline = currentPlayers.some((cp) => cp.peerId === oldPeerId);
-        if (oldPeerOnline) continue;
+        if (oldEntry) {
+          // Don't give the name to a second voter while its original owner is online
+          const [oldPeerId] = oldEntry;
+          const oldPeerOnline = currentPlayers.some((cp) => cp.peerId === oldPeerId);
+          if (oldPeerOnline) continue;
+        }
 
         resolvedPlayers[peerId] = p.name;
         break;

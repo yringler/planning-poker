@@ -176,12 +176,10 @@ describe('resolveHistory', () => {
     });
   });
 
-  // BUG: src/app/services/room-logic.ts:91-104 (was room.service.ts:171-184) only
-  // names an online voter when entry.players holds the same name under an old offline peerId,
-  // so an online voter missing from names and entry.players stays unnamed.
-  it('CLI-HIST-06 (BUG): an online voter is not named from the current players', () => {
-    // BUG: should be { p2: 'Ann' }
-    expect(players(resolveHistory([E({ p2: '5' }, {})], [P('Ann', 'p2')], {}))).toEqual({});
+  it('CLI-HIST-06: an online voter is named from the current players', () => {
+    expect(players(resolveHistory([E({ p2: '5' }, {})], [P('Ann', 'p2')], {}))).toEqual({
+      p2: 'Ann',
+    });
   });
 
   it('CLI-HIST-07: an empty entry name falls back to names', () => {

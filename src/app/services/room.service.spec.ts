@@ -290,21 +290,25 @@ describe('timer', () => {
     expect(svc.timerRemainingOnPause()).toBe(0);
   });
 
-  // BUG: src/app/services/room.service.ts:491 (`endTime + delta * 1000`) shifts a running
-  // timer by the raw delta even when the duration was clamped at 10 s.
-  it('SVC-TMR-10 (BUG): a clamped adjustment still moves a running timer', () => {
+  it('SVC-TMR-10: a clamped adjustment does not move a running timer', () => {
     setTimer({ timerState: 'running', timerDuration: 10, timerEndTime: T0 + 10_000 });
     svc.adjustDuration(-30);
     expect(svc.timerDuration()).toBe(10);
-    expect(svc.timerEndTime()).toBe(T0 - 20_000); // BUG: should be T0 + 10_000
+    expect(svc.timerEndTime()).toBe(T0 + 10_000);
   });
 
-  // BUG: src/app/services/room.service.ts:491, as SVC-TMR-10 (partly clamped delta).
-  it('SVC-TMR-11 (BUG): a partly clamped adjustment moves the end time by the raw delta', () => {
+  it('SVC-TMR-11: a partly clamped adjustment moves the end time by the applied delta', () => {
     setTimer({ timerState: 'running', timerDuration: 20, timerEndTime: T0 + 20_000 });
     svc.adjustDuration(-30);
     expect(svc.timerDuration()).toBe(10);
-    expect(svc.timerEndTime()).toBe(T0 - 10_000); // BUG: should be T0 + 10_000
+    expect(svc.timerEndTime()).toBe(T0 + 10_000);
+  });
+
+  it('SVC-TMR-13: a partly clamped adjustment moves a paused timer by the applied delta', () => {
+    setTimer({ timerState: 'paused', timerDuration: 20, timerRemainingOnPause: 15 });
+    svc.adjustDuration(-30);
+    expect(svc.timerDuration()).toBe(10);
+    expect(svc.timerRemainingOnPause()).toBe(5);
   });
 
   it('SVC-TMR-12: toggles timer visibility', () => {
@@ -738,11 +742,10 @@ describe('mid-check join tracking', () => {
     join('ABC123', 'Ann', { synced: false });
     expect(() => runRound(5)).not.toThrow();
     expect(svc.joinedMidCheck()).toBe(true);
-    // PIN (spec deviation, suspected bug): with storage unavailable nothing remembers the
-    // first sighting, so the next session update (here the post-sync defaults) re-reads
-    // "unseen" with initialLoad=false and the hint disappears within the same tab.
+    // Without storage the first sighting is still remembered in memory, so the next session
+    // update (here the post-sync defaults) keeps the hint within this tab.
     p.synced(true);
-    expect(svc.joinedMidCheck()).toBe(false);
+    expect(svc.joinedMidCheck()).toBe(true);
   });
 
   it('SVC-MID-06: corrupt storage is treated as unseen', () => {
@@ -752,11 +755,9 @@ describe('mid-check join tracking', () => {
     expect(sessionStorage.getItem(KEY)).toBe('{"round":5,"mid":true}');
   });
 
-  // BUG: src/app/services/room.service.ts:604 sets joinedMidCheck to `seen.mid`, which is
-  // undefined when the stored record lacks `mid`.
-  it('SVC-MID-07 (BUG): a stored record without mid gives undefined', () => {
+  it('SVC-MID-07: a stored record without mid gives false', () => {
     sessionStorage.setItem(KEY, '{"round":5}');
     joinMidCheck();
-    expect(svc.joinedMidCheck()).toBeUndefined(); // BUG: should be false
+    expect(svc.joinedMidCheck()).toBe(false);
   });
 });

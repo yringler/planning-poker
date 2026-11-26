@@ -217,13 +217,13 @@ export class TimerComponent implements OnInit {
     if (state === 'running' && endTime) {
       const remaining = Math.max(0, (endTime - Date.now()) / 1000);
       this.formatTime(remaining);
-      if (remaining <= 0) {
-        this.formatTime(0);
-        this.isFinished.set(true);
-      }
+      // Derived each tick, so a restart or extension by another client clears it
+      this.isFinished.set(remaining <= 0);
     } else if (state === 'paused') {
+      this.isFinished.set(false);
       this.formatTime(this.room.timerRemainingOnPause());
     } else {
+      this.isFinished.set(false);
       this.formatTime(this.room.timerDuration());
     }
   }

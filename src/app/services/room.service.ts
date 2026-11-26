@@ -99,6 +99,8 @@ export class RoomService {
   private skipNoticeTimer: ReturnType<typeof setTimeout> | null = null;
   /** True when this client first saw the current round already running (joined mid-check). */
   readonly joinedMidCheck = signal(false);
+  /** The current round as this tab first saw it (see `trackMidCheckJoin`). */
+  private midCheckSeen: SeenCheck | null = null;
   private roomCode = '';
 
   /** peerIds confident in the current round (values from older rounds are ignored). */
@@ -329,6 +331,7 @@ export class RoomService {
     this.confidenceRaw.set({});
     this.serverOffset.set(0);
     this.joinedMidCheck.set(false);
+    this.midCheckSeen = null;
     if (this.skipNoticeTimer) clearTimeout(this.skipNoticeTimer);
     this.skipNoticeTimer = null;
     this.skipNotice.set(null);
@@ -491,15 +494,20 @@ export class RoomService {
     if (!this.doc) return;
     const sessionMap = this.doc.getMap('session');
     const newDuration = Math.max(10, this.timerDuration() + delta);
+    // Shift the countdown by what the duration actually changed, not the requested delta
+    const applied = newDuration - this.timerDuration();
     this.doc.transact(() => {
       sessionMap.set('timerDuration', newDuration);
       if (this.timerState() === 'running') {
         const endTime = this.timerEndTime();
         if (endTime) {
-          sessionMap.set('timerEndTime', endTime + delta * 1000);
+          sessionMap.set('timerEndTime', endTime + applied * 1000);
         }
       } else if (this.timerState() === 'paused') {
-        sessionMap.set('timerRemainingOnPause', Math.max(0, this.timerRemainingOnPause() + delta));
+        sessionMap.set(
+          'timerRemainingOnPause',
+          Math.max(0, this.timerRemainingOnPause() + applied),
+        );
       }
     });
   }
@@ -592,12 +600,8 @@ export class RoomService {
     }
     const key = `pp-check-seen-${this.roomCode}`;
     const round = this.checkRound();
-    let seen: { round: number; mid: boolean } | null = null;
-    try {
-      seen = JSON.parse(sessionStorage.getItem(key) ?? 'null');
-    } catch {
-      seen = null;
-    }
+    // Memory covers this tab even when storage is unavailable; storage covers reloads
+    let seen = this.midCheckSeen?.round === round ? this.midCheckSeen : readSeenCheck(key);
     if (seen?.round !== round) {
       seen = { round, mid: initialLoad };
       try {
@@ -606,6 +610,7 @@ export class RoomService {
         // Storage unavailable: the hint just may reappear after a reload
       }
     }
+    this.midCheckSeen = seen;
     this.joinedMidCheck.set(seen.mid);
   }
 
@@ -617,5 +622,24 @@ export class RoomService {
       localStorage.setItem(key, id);
     }
     return id;
+  }
+}
+
+interface SeenCheck {
+  round: number;
+  mid: boolean;
+}
+
+/** Reads this tab's stored record of a check round; null if missing, corrupt or unreadable. */
+function readSeenCheck(key: string): SeenCheck | null {
+  try {
+    const raw: unknown = JSON.parse(sessionStorage.getItem(key) ?? 'null');
+    if (typeof raw !== 'object' || raw === null) return null;
+    const { round, mid } = raw as Record<string, unknown>;
+    if (typeof round !== 'number') return null;
+    // A record without a valid `mid` still means this tab saw the round, so no hint
+    return { round, mid: mid === true };
+  } catch {
+    return null;
   }
 }
