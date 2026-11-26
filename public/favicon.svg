@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Back card -->
+  <rect x="4" y="5" width="16" height="22" rx="3" transform="rotate(-14 12 16)" fill="#4f46e5"/>
+  <!-- Front card with a question mark -->
+  <g transform="rotate(10 20 16)">
+    <rect x="12" y="5" width="16" height="22" rx="3" fill="#ffffff" stroke="#4f46e5" stroke-width="2"/>
+    <path d="M16.6 13.2a3.4 3.4 0 1 1 4.9 3.1c-1.1.6-1.5 1.2-1.5 2.4" fill="none" stroke="#4f46e5" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="20" cy="22.6" r="1.6" fill="#4f46e5"/>
+  </g>
+</svg>
