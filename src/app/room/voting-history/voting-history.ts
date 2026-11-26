@@ -35,7 +35,16 @@ import { RoomService } from '../../services/room.service';
               }
               <div class="meta">
                 <span class="timestamp">{{ entry.timestamp | date:'M/d/yyyy h:mm a' }}</span>
-                <span class="average">{{ calcAverage(entry.votes) }}</span>
+                <span class="average">
+                  {{ calcAverage(entry.votes) }}
+                  @if (averageValue(entry.votes); as value) {
+                    <wa-copy-button
+                      [attr.value]="value"
+                      copy-label="Copy points"
+                      success-label="Copied!"
+                    ></wa-copy-button>
+                  }
+                </span>
               </div>
             </div>
             <wa-divider style="margin: var(--wa-space-s) 0"></wa-divider>
@@ -188,12 +197,17 @@ export class VotingHistoryComponent {
     this.room.deleteHistoryEntry(timestamp);
   }
 
-  calcAverage(votes: Record<string, string>): string {
+  averageValue(votes: Record<string, string>): string | null {
     const nums = Object.values(votes)
       .map((v) => parseFloat(v))
       .filter((v) => !isNaN(v));
-    if (nums.length === 0) return 'No numeric votes';
+    if (nums.length === 0) return null;
     const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
-    return `Avg: ${avg % 1 === 0 ? avg.toString() : avg.toFixed(1)}`;
+    return avg % 1 === 0 ? avg.toString() : avg.toFixed(1);
+  }
+
+  calcAverage(votes: Record<string, string>): string {
+    const value = this.averageValue(votes);
+    return value === null ? 'No numeric votes' : `Avg: ${value}`;
   }
 }

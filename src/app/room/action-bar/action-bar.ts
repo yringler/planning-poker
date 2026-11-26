@@ -11,6 +11,13 @@ import { RoomService } from '../../services/room.service';
           <div class="average-display">
             <wa-icon name="chart-bar"></wa-icon>
             <span class="average-value">{{ averageText() }}</span>
+            @if (averageValue() !== null) {
+              <wa-copy-button
+                [attr.value]="averageValue()"
+                copy-label="Copy final points"
+                success-label="Copied!"
+              ></wa-copy-button>
+            }
           </div>
           <div slot="end" class="wa-cluster wa-gap-s">
             <wa-button variant="brand" appearance="filled" (click)="room.newRound()">
@@ -33,7 +40,7 @@ import { RoomService } from '../../services/room.service';
             <wa-button
               variant="brand"
               appearance="filled"
-              (click)="room.revealVotes()"
+              (click)="revealAndCopy()"
             >
               <wa-icon slot="start" name="eye"></wa-icon>
               Reveal Votes
@@ -102,13 +109,28 @@ export class ActionBarComponent {
     return `Waiting for votes… (${this.voteCount()}/${this.voters().length})`;
   });
 
-  readonly averageText = computed(() => {
-    const votes = this.room.votes();
-    const numericVotes = Object.values(votes)
+  /** Final points for the revealed round (formatted average), or null if no numeric votes. */
+  readonly averageValue = computed(() => {
+    const numericVotes = Object.values(this.room.votes())
       .map((v) => parseFloat(v))
       .filter((v) => !isNaN(v));
-    if (numericVotes.length === 0) return 'No numeric votes';
+    if (numericVotes.length === 0) return null;
     const avg = numericVotes.reduce((a, b) => a + b, 0) / numericVotes.length;
-    return `Avg: ${avg % 1 === 0 ? avg.toString() : avg.toFixed(1)}`;
+    return avg % 1 === 0 ? avg.toString() : avg.toFixed(1);
   });
+
+  readonly averageText = computed(() => {
+    const value = this.averageValue();
+    return value === null ? 'No numeric votes' : `Avg: ${value}`;
+  });
+
+  /** Reveals votes and copies the final points (average) to the clipboard. */
+  revealAndCopy(): void {
+    const value = this.averageValue();
+    this.room.revealVotes();
+    if (value === null) return;
+    navigator.clipboard
+      .writeText(value)
+      .catch((err: unknown) => console.error('Failed to copy final points', err));
+  }
 }
