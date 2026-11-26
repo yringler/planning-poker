@@ -35,7 +35,17 @@ import { RoomService } from '../../services/room.service';
               }
               <div class="meta">
                 <span class="timestamp">{{ entry.timestamp | date:'M/d/yyyy h:mm a' }}</span>
-                <span class="average">{{ calcAverage(entry.votes) }}</span>
+                <span class="average">
+                  {{ calcAverage(entry.votes) }}
+                  @if (averageValue(entry.votes); as value) {
+                    <wa-icon
+                      [attr.name]="copiedTimestamp() === entry.timestamp ? 'check' : 'copy'"
+                      class="action-icon copy"
+                      [attr.title]="copiedTimestamp() === entry.timestamp ? 'Copied!' : 'Copy points'"
+                      (click)="copyPoints(entry.timestamp, value)"
+                    ></wa-icon>
+                  }
+                </span>
               </div>
             </div>
             <wa-divider style="margin: var(--wa-space-s) 0"></wa-divider>
@@ -103,6 +113,14 @@ import { RoomService } from '../../services/room.service';
       color: var(--wa-color-danger-fill-loud);
     }
 
+    .action-icon.copy {
+      margin-left: var(--wa-space-2xs);
+      color: var(--wa-color-neutral-on-quiet);
+    }
+    .action-icon.copy:hover {
+      color: var(--wa-color-brand-fill-loud);
+    }
+
     .action-icon.save {
       color: var(--wa-color-success-fill-loud);
     }
@@ -165,6 +183,8 @@ export class VotingHistoryComponent {
   readonly room = inject(RoomService);
   readonly editingTimestamp = signal<number | null>(null);
   readonly editingValue = signal('');
+  readonly copiedTimestamp = signal<number | null>(null);
+  private copiedTimeout: ReturnType<typeof setTimeout> | undefined;
 
   startEdit(timestamp: number, story: string): void {
     this.editingTimestamp.set(timestamp);
@@ -188,12 +208,28 @@ export class VotingHistoryComponent {
     this.room.deleteHistoryEntry(timestamp);
   }
 
-  calcAverage(votes: Record<string, string>): string {
+  averageValue(votes: Record<string, string>): string | null {
     const nums = Object.values(votes)
       .map((v) => parseFloat(v))
       .filter((v) => !isNaN(v));
-    if (nums.length === 0) return 'No numeric votes';
+    if (nums.length === 0) return null;
     const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
-    return `Avg: ${avg % 1 === 0 ? avg.toString() : avg.toFixed(1)}`;
+    return avg % 1 === 0 ? avg.toString() : avg.toFixed(1);
+  }
+
+  calcAverage(votes: Record<string, string>): string {
+    const value = this.averageValue(votes);
+    return value === null ? 'No numeric votes' : `Avg: ${value}`;
+  }
+
+  async copyPoints(timestamp: number, value: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(value);
+      this.copiedTimestamp.set(timestamp);
+      clearTimeout(this.copiedTimeout);
+      this.copiedTimeout = setTimeout(() => this.copiedTimestamp.set(null), 1500);
+    } catch (err) {
+      console.error('Failed to copy points', err);
+    }
   }
 }
