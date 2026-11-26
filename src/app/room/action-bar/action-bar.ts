@@ -1,4 +1,4 @@
-import { Component, computed, inject, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import { Component, computed, inject, signal, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { RoomService } from '../../services/room.service';
 
 @Component({
@@ -11,9 +11,20 @@ import { RoomService } from '../../services/room.service';
           <div class="average-display">
             <wa-icon name="chart-bar"></wa-icon>
             <span class="average-value">{{ averageText() }}</span>
+            @if (averageValue() !== null) {
+              <wa-button
+                size="small"
+                appearance="plain"
+                [attr.title]="copied() ? 'Copied!' : 'Copy final points'"
+                (click)="copyFinalPoints()"
+              >
+                <wa-icon slot="start" [attr.name]="copied() ? 'check' : 'copy'"></wa-icon>
+                {{ copied() ? 'Copied!' : 'Copy' }}
+              </wa-button>
+            }
           </div>
           <div slot="end" class="wa-cluster wa-gap-s">
-            <wa-button variant="brand" appearance="filled" (click)="room.newRound()">
+            <wa-button variant="brand" appearance="filled" (click)="finishRound()">
               <wa-icon slot="start" name="plus"></wa-icon>
               New Round
             </wa-button>
@@ -102,13 +113,41 @@ export class ActionBarComponent {
     return `Waiting for votes… (${this.voteCount()}/${this.voters().length})`;
   });
 
-  readonly averageText = computed(() => {
-    const votes = this.room.votes();
-    const numericVotes = Object.values(votes)
+  /** Final points for the revealed round (formatted average), or null if no numeric votes. */
+  readonly averageValue = computed(() => {
+    const numericVotes = Object.values(this.room.votes())
       .map((v) => parseFloat(v))
       .filter((v) => !isNaN(v));
-    if (numericVotes.length === 0) return 'No numeric votes';
+    if (numericVotes.length === 0) return null;
     const avg = numericVotes.reduce((a, b) => a + b, 0) / numericVotes.length;
-    return `Avg: ${avg % 1 === 0 ? avg.toString() : avg.toFixed(1)}`;
+    return avg % 1 === 0 ? avg.toString() : avg.toFixed(1);
   });
+
+  readonly averageText = computed(() => {
+    const value = this.averageValue();
+    return value === null ? 'No numeric votes' : `Avg: ${value}`;
+  });
+
+  readonly copied = signal(false);
+  private copiedTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  async copyFinalPoints(): Promise<void> {
+    const value = this.averageValue();
+    if (value === null) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      this.copied.set(true);
+      clearTimeout(this.copiedTimeout);
+      this.copiedTimeout = setTimeout(() => this.copied.set(false), 1500);
+    } catch (err) {
+      console.error('Failed to copy final points', err);
+    }
+  }
+
+  /** Finishes the round: copies the final points to the clipboard, then starts a new round. */
+  finishRound(): void {
+    // Start the clipboard write (captures the value) before votes are cleared.
+    void this.copyFinalPoints();
+    this.room.newRound();
+  }
 }
