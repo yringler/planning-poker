@@ -45,6 +45,13 @@ All room state lives in `RoomService` via Yjs maps:
 
 Yjs awareness tracks connected players with name + peerId.
 
+## Anonymity
+
+Confidence-check answers only need to be hidden in the UI (no names, counts or other tells
+until the round ends). The `confidence` Yjs map is synced to every client, so devtools can see
+it; that's fine. We don't need real anonymity, so keep it simple and don't route answers through
+the server to hide them.
+
 ## Coding Conventions
 
 - Angular standalone components with inline templates and styles
