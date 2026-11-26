@@ -8,13 +8,15 @@ import {
   ITEM_URL_KEY,
   MODE_KEY,
   checkPhase,
-  type CheckAction,
+  isRecord,
+  normaliseCheck,
+  parseClientMessage,
   type CheckState,
-  type ClientMessage,
   type HistoryEntry,
   type RoomMode,
   type ServerMessage,
 } from '../src/app/shared/confidence-protocol';
+import { CLIENT_ID_KEY, connectedPlayers } from './connected-players';
 
 interface Env {
   PlanningPoker: DurableObjectNamespace<PlanningPoker>;
@@ -23,8 +25,6 @@ interface Env {
 const SNAPSHOT_KEY = 'snapshot';
 /** Transaction origin for the server's own writes (so they don't re-trigger evaluation). */
 const SERVER_ORIGIN = 'planning-poker-server';
-/** Connection state key holding the awareness clientID the client announced in `hello`. */
-const CLIENT_ID_KEY = 'ppClientId';
 
 // One Durable Object per room. The Yjs doc lives in memory while clients are
 // connected; a full-state snapshot is written to the DO's own storage so the
@@ -320,37 +320,9 @@ export class PlanningPoker extends YServer<Env> {
     return ids;
   }
 
-  /**
-   * Connected, non-observer players by peerId (several tabs of one browser count once).
-   * Only awareness states owned by an open connection count: the server's awareness never
-   * expires states itself, so this keeps a leftover state from blocking the check.
-   * Ownership comes from y-partyserver's own record (`__ypsAwarenessIds`) plus the clientID
-   * each client announces in `hello`: y-partyserver only records IDs when an awareness update
-   * applies, so a reconnect that re-sends an unchanged state leaves its list empty.
-   */
+  /** Connected, non-observer players by peerId (see `connectedPlayers`). */
   private connectedPlayers(): Map<string, string> {
-    const liveIds = new Set<number>();
-    for (const conn of this.getConnections()) {
-      if (conn.readyState !== 1 /* OPEN */) continue;
-      const state = isRecord(conn.state) ? conn.state : {};
-      const ids = state['__ypsAwarenessIds'];
-      if (Array.isArray(ids)) ids.forEach((id) => typeof id === 'number' && liveIds.add(id));
-      const hello = state[CLIENT_ID_KEY];
-      if (isFiniteNumber(hello)) liveIds.add(hello);
-    }
-    const players = new Map<string, string>();
-    const observers = new Set<string>();
-    this.document.awareness.getStates().forEach((state: Record<string, unknown>, clientId) => {
-      if (!liveIds.has(clientId)) return;
-      const peerId = state?.['peerId'];
-      const name = state?.['name'];
-      if (typeof peerId !== 'string' || typeof name !== 'string') return;
-      if (state['observer']) observers.add(peerId);
-      else players.set(peerId, name);
-    });
-    // A peer observing in any tab doesn't count
-    for (const id of observers) players.delete(id);
-    return players;
+    return connectedPlayers(this.getConnections(), this.document.awareness.getStates());
   }
 
   /** Resets the check; with `clearItem`, starts a fresh item (keeps the round counter). */
@@ -408,73 +380,6 @@ export class PlanningPoker extends YServer<Env> {
     const msg: ServerMessage = { type: 'time', now: Date.now() };
     this.broadcastCustomMessage(JSON.stringify(msg));
   }
-}
-
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v);
-const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
-const CHECK_ACTIONS: readonly CheckAction[] = ['start', 'cancel', 'skip', 'next'];
-
-/** Parses a client request; returns null for anything malformed. */
-function parseClientMessage(raw: string): ClientMessage | null {
-  let data: unknown;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (!isRecord(data)) return null;
-  if (data['type'] === 'hello') {
-    return isFiniteNumber(data['clientId']) ? { type: 'hello', clientId: data['clientId'] } : null;
-  }
-  if (!isFiniteNumber(data['round'])) return null;
-  const round = data['round'];
-  if (data['type'] === 'mode') {
-    const mode = data['mode'];
-    return mode === 'points' || mode === 'confidence' ? { type: 'mode', mode, round } : null;
-  }
-  if (data['type'] === 'check') {
-    const action = CHECK_ACTIONS.find((a) => a === data['action']);
-    return action ? { type: 'check', action, round } : null;
-  }
-  return null;
-}
-
-/** Coerces whatever is stored in `session.check` into a valid CheckState. */
-function normaliseCheck(value: unknown): CheckState {
-  const v = isRecord(value) ? value : {};
-  const outcome = isRecord(v['outcome']) ? v['outcome'] : null;
-  const notConfident: Record<string, string> = {};
-  if (outcome && isRecord(outcome['notConfident'])) {
-    for (const [id, name] of Object.entries(outcome['notConfident'])) {
-      if (typeof name === 'string') notConfident[id] = name;
-    }
-  }
-  return {
-    itemId: typeof v['itemId'] === 'string' ? v['itemId'] : '',
-    round: isFiniteNumber(v['round']) ? v['round'] : 0,
-    startedAt: isFiniteNumber(v['startedAt']) ? v['startedAt'] : null,
-    outcome:
-      outcome && (outcome['result'] === 'confident' || outcome['result'] === 'paused')
-        ? {
-            result: outcome['result'],
-            at: isFiniteNumber(outcome['at']) ? outcome['at'] : 0,
-            notConfident,
-            confident: Array.isArray(outcome['confident'])
-              ? outcome['confident'].filter((id): id is string => typeof id === 'string')
-              : [],
-          }
-        : null,
-    checks: isFiniteNumber(v['checks']) ? v['checks'] : 0,
-    log: Array.isArray(v['log'])
-      ? v['log'].filter(isRecord).map((a) => ({
-          check: isFiniteNumber(a['check']) ? a['check'] : 0,
-          notConfident: Array.isArray(a['notConfident'])
-            ? a['notConfident'].filter((n): n is string => typeof n === 'string')
-            : [],
-        }))
-      : [],
-  };
 }
 
 export default {

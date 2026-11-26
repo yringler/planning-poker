@@ -1,6 +1,7 @@
-import { Injectable, signal, computed, DestroyRef, inject } from '@angular/core';
+import { Injectable, InjectionToken, signal, computed, DestroyRef, inject } from '@angular/core';
 import * as Y from 'yjs';
 import YProvider from 'y-partyserver/provider';
+import type { Awareness } from 'y-protocols/awareness';
 import { environment } from '../../environments/environment';
 import {
   CHECK_KEY,
@@ -15,14 +16,38 @@ import {
   type RoomMode,
   type ServerMessage,
 } from '../shared/confidence-protocol';
+import {
+  confidencePlayers,
+  confidentIdsForRound,
+  pointPlayers,
+  resolveHistory,
+  type Player,
+} from './room-logic';
 
-export interface Player {
-  name: string;
-  peerId: string;
-  observer?: boolean;
-  /** True for a player who left the room but whose vote is kept for this round. */
-  offline?: boolean;
+export type { Player } from './room-logic';
+
+/** The parts of y-partyserver's `YProvider` that RoomService uses. */
+export interface ProviderLike {
+  readonly awareness: Awareness;
+  on(event: 'status', cb: (e: { status: string }) => void): void;
+  on(event: 'synced', cb: (synced: boolean) => void): void;
+  on(event: 'custom-message', cb: (raw: string) => void): void;
+  sendMessage(msg: string): void;
+  destroy(): void;
 }
+
+export type YProviderFactory = (
+  host: string,
+  room: string,
+  doc: Y.Doc,
+  opts: { party: string },
+) => ProviderLike;
+
+/** Creates the realtime provider; tests swap in a fake that opens no WebSocket. */
+export const Y_PROVIDER_FACTORY = new InjectionToken<YProviderFactory>('Y_PROVIDER_FACTORY', {
+  providedIn: 'root',
+  factory: () => (host, room, doc, opts) => new YProvider(host, room, doc, opts),
+});
 
 export type {
   CheckAttempt,
@@ -37,8 +62,9 @@ export { CHECK_DURATION_MS } from '../shared/confidence-protocol';
 @Injectable({ providedIn: 'root' })
 export class RoomService {
   private doc: Y.Doc | null = null;
-  private provider: YProvider | null = null;
+  private provider: ProviderLike | null = null;
   private destroyRef = inject(DestroyRef);
+  private createProvider = inject(Y_PROVIDER_FACTORY);
 
   readonly storyName = signal('');
   readonly phase = signal<'voting' | 'revealed'>('voting');
@@ -75,63 +101,26 @@ export class RoomService {
   private roomCode = '';
 
   /** peerIds confident in the current round (values from older rounds are ignored). */
-  readonly confidentIds = computed(() => {
-    const round = this.checkRound();
-    const raw = this.confidenceRaw();
-    return new Set(Object.keys(raw).filter((id) => raw[id] === round));
-  });
+  readonly confidentIds = computed(() =>
+    confidentIdsForRound(this.confidenceRaw(), this.checkRound()),
+  );
 
   readonly uniquePlayers = computed(() =>
     this.mode() === 'confidence' ? this.confidencePlayers() : this.pointPlayers(),
   );
 
   /** Point voting: deduped by name, keeping departed voters until the round is cleared. */
-  private readonly pointPlayers = computed(() => {
-    const votes = this.votes();
-    const names = this.peerNames();
-    const online = this.players();
-    const onlineIds = new Set(online.map((p) => p.peerId));
-    // Players who voted and then left: keep them (and their vote) until the round is cleared
-    const departed: Player[] = Object.keys(votes)
-      .filter((peerId) => !onlineIds.has(peerId))
-      .map((peerId) => ({ name: names[peerId] ?? 'Unknown', peerId, offline: true }));
-
-    const seen = new Map<string, Player>();
-    for (const p of [...online, ...departed]) {
-      const existing = seen.get(p.name);
-      // Prefer the entry that has voted; otherwise the first (online before departed) wins
-      if (!existing || (!votes[existing.peerId] && votes[p.peerId])) {
-        seen.set(p.name, p);
-      }
-    }
-    return Array.from(seen.values());
-  });
+  private readonly pointPlayers = computed(() =>
+    pointPlayers(this.players(), this.votes(), this.peerNames()),
+  );
 
   /**
    * Confidence check: deduped by peerId (same as the server's count), so two people with the
    * same name both count. In a pause, revealed not-confident players who left stay listed.
    */
-  private readonly confidencePlayers = computed(() => {
-    const names = this.peerNames();
-    const byPeer = new Map<string, Player>();
-    for (const p of this.players()) {
-      const existing = byPeer.get(p.peerId);
-      // Several tabs of one browser: observer in any tab wins (matches the server)
-      byPeer.set(
-        p.peerId,
-        existing ? { ...existing, observer: existing.observer || p.observer } : p,
-      );
-    }
-    const outcome = this.checkOutcome();
-    if (this.checkPhase() === 'paused' && outcome) {
-      for (const [peerId, name] of Object.entries(outcome.notConfident)) {
-        if (!byPeer.has(peerId)) {
-          byPeer.set(peerId, { name: names[peerId] ?? name, peerId, offline: true });
-        }
-      }
-    }
-    return Array.from(byPeer.values());
-  });
+  private readonly confidencePlayers = computed(() =>
+    confidencePlayers(this.players(), this.peerNames(), this.checkPhase(), this.checkOutcome()),
+  );
   readonly onlineCount = computed(() => this.uniquePlayers().filter((p) => !p.offline).length);
 
   /** Who a confidence check counts: connected non-observers (confidence mode: by peerId). */
@@ -148,45 +137,13 @@ export class RoomService {
   readonly connected = signal(false);
   readonly isObserver = signal(false);
 
-  readonly resolvedHistory = computed(() => {
-    const currentPlayers = this.pointPlayers().filter((p) => !p.offline);
-    const names = this.peerNames();
-    const history = this.history();
-
-    const onlineNameCount = new Map<string, number>();
-    for (const p of currentPlayers) {
-      onlineNameCount.set(p.name, (onlineNameCount.get(p.name) ?? 0) + 1);
-    }
-
-    return history.map(entry => {
-      const resolvedPlayers: Record<string, string> = { ...entry.players };
-
-      for (const peerId of Object.keys(entry.votes)) {
-        if (resolvedPlayers[peerId]) continue;
-        if (names[peerId]) {
-          resolvedPlayers[peerId] = names[peerId];
-          continue;
-        }
-
-        for (const p of currentPlayers) {
-          if (onlineNameCount.get(p.name) !== 1) continue;
-          if (p.peerId !== peerId) continue;
-
-          const oldEntry = Object.entries(entry.players).find(([, n]) => n === p.name);
-          if (!oldEntry) continue;
-
-          const [oldPeerId] = oldEntry;
-          const oldPeerOnline = currentPlayers.some(cp => cp.peerId === oldPeerId);
-          if (oldPeerOnline) continue;
-
-          resolvedPlayers[peerId] = p.name;
-          break;
-        }
-      }
-
-      return { ...entry, players: resolvedPlayers };
-    });
-  });
+  readonly resolvedHistory = computed(() =>
+    resolveHistory(
+      this.history(),
+      this.pointPlayers().filter((p) => !p.offline),
+      this.peerNames(),
+    ),
+  );
 
   connect(roomCode: string, playerName: string): void {
     this.disconnect();
@@ -198,9 +155,12 @@ export class RoomService {
     let synced = false;
 
     // `party` is the kebab-cased Durable Object binding name in wrangler.jsonc
-    this.provider = new YProvider(environment.partyHost, `planning-poker-${roomCode}`, this.doc, {
-      party: 'planning-poker',
-    });
+    this.provider = this.createProvider(
+      environment.partyHost,
+      `planning-poker-${roomCode}`,
+      this.doc,
+      { party: 'planning-poker' },
+    );
     this.provider.on('status', ({ status }: { status: string }) => {
       this.connected.set(status === 'connected');
       if (status === 'connected' && this.doc) {
