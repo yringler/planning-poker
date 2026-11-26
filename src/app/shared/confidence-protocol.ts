@@ -54,10 +54,15 @@ export interface CheckState {
 
 export type CheckAction = 'start' | 'cancel' | 'skip' | 'next';
 
-/** Client → server requests (sent as y-partyserver custom messages). */
+/**
+ * Client → server requests (sent as y-partyserver custom messages). `round` is the check
+ * round the client saw; the server ignores requests for any other round.
+ */
 export type ClientMessage =
-  | { type: 'check'; action: CheckAction }
-  | { type: 'mode'; mode: RoomMode };
+  | { type: 'check'; action: CheckAction; round: number }
+  | { type: 'mode'; mode: RoomMode; round: number }
+  /** Sent on every (re)connect: this client's awareness clientID, so the server knows it's live. */
+  | { type: 'hello'; clientId: number };
 
 /** Server → client messages. `now` lets clients estimate their clock offset. */
 export type ServerMessage = { type: 'time'; now: number };

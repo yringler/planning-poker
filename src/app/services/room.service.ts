@@ -134,7 +134,7 @@ export class RoomService {
   });
   readonly onlineCount = computed(() => this.uniquePlayers().filter((p) => !p.offline).length);
 
-  /** Who a confidence check counts: connected, non-observer, deduped by name. */
+  /** Who a confidence check counts: connected non-observers (confidence mode: by peerId). */
   readonly checkPlayers = computed(() =>
     this.uniquePlayers().filter((p) => !p.offline && !p.observer),
   );
@@ -203,6 +203,9 @@ export class RoomService {
     });
     this.provider.on('status', ({ status }: { status: string }) => {
       this.connected.set(status === 'connected');
+      if (status === 'connected' && this.doc) {
+        this.send({ type: 'hello', clientId: this.doc.clientID });
+      }
     });
     this.provider.on('synced', (isSynced: boolean) => {
       if (!isSynced || synced) return;
@@ -533,7 +536,7 @@ export class RoomService {
 
   setMode(mode: RoomMode): void {
     if (mode === this.mode() || this.checkPhase() === 'checking') return;
-    this.send({ type: 'mode', mode });
+    this.send({ type: 'mode', mode, round: this.checkRound() });
   }
 
   updateItemUrl(url: string): void {
@@ -575,7 +578,7 @@ export class RoomService {
   }
 
   private sendCheck(action: CheckAction): boolean {
-    return this.send({ type: 'check', action });
+    return this.send({ type: 'check', action, round: this.checkRound() });
   }
 
   /** Sends a request to the server; returns false (and does nothing) while disconnected. */
