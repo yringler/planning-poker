@@ -79,7 +79,7 @@ import { parseTicketUrl } from './ticket-url';
           <wa-card appearance="filled" class="panel">
             <div class="wa-stack wa-gap-m">
               <div class="panel-top">
-                <app-timer [endTime]="endTime()" />
+                <app-timer [endTime]="endTime()" [maxSeconds]="maxSeconds" />
                 <span class="count" data-testid="confidence-count">
                   {{ room.confidentCount() }} / {{ total() }} confident
                 </span>
@@ -102,6 +102,7 @@ import { parseTicketUrl } from './ticket-url';
                       variant="neutral"
                       [attr.appearance]="room.amConfident() ? 'outlined' : 'filled'"
                       [attr.aria-pressed]="!room.amConfident()"
+                      [attr.disabled]="room.connected() ? null : ''"
                       (click)="room.setConfident(false)"
                     >
                       Not confident
@@ -111,13 +112,18 @@ import { parseTicketUrl } from './ticket-url';
                       variant="success"
                       [attr.appearance]="room.amConfident() ? 'filled' : 'outlined'"
                       [attr.aria-pressed]="room.amConfident()"
+                      [attr.disabled]="room.connected() ? null : ''"
                       (click)="room.setConfident(true)"
                     >
                       <wa-icon slot="start" name="circle-check"></wa-icon>
                       Confident
                     </wa-button>
                   </div>
-                  @if (joinedMidCheck()) {
+                  @if (!room.connected()) {
+                    <span class="hint">
+                      Reconnecting… your answer can't be changed until then.
+                    </span>
+                  } @else if (room.joinedMidCheck() && !room.amConfident()) {
                     <span class="hint">You joined mid-check. Pick an answer.</span>
                   }
                 </div>
@@ -133,7 +139,11 @@ import { parseTicketUrl } from './ticket-url';
                 <wa-icon name="circle-check"></wa-icon>
                 Everyone is confident ({{ outcomeConfident() }} / {{ outcomeConfident() }})
               </span>
-              <app-timer [endTime]="endTime()" [stoppedAt]="room.checkOutcome()?.at ?? null" />
+              <app-timer
+                [endTime]="endTime()"
+                [stoppedAt]="stoppedAt()"
+                [maxSeconds]="maxSeconds"
+              />
             </div>
             <p class="panel-text">Confident! Set up the next item when you're ready.</p>
           </wa-card>
@@ -295,16 +305,18 @@ export class ConfidenceCheckComponent {
   readonly percent = computed(() =>
     this.total() === 0 ? 0 : Math.round((this.room.confidentCount() / this.total()) * 100),
   );
+  readonly maxSeconds = CHECK_DURATION_MS / 1000;
+  /** Server-stamped deadline converted to this client's clock. */
   readonly endTime = computed(() => {
     const startedAt = this.room.checkStartedAt();
-    return startedAt == null ? null : startedAt + CHECK_DURATION_MS;
+    return startedAt == null ? null : startedAt + CHECK_DURATION_MS - this.room.serverOffset();
+  });
+  readonly stoppedAt = computed(() => {
+    const at = this.room.checkOutcome()?.at;
+    return at == null ? null : at - this.room.serverOffset();
   });
   readonly ticket = computed(() => parseTicketUrl(this.room.itemUrl()));
   readonly canToggle = computed(() => !this.room.isObserver());
-  readonly joinedMidCheck = computed(() => {
-    const startedAt = this.room.checkStartedAt();
-    return startedAt != null && startedAt < this.room.joinedAt() && !this.room.amConfident();
-  });
 
   readonly notConfident = computed(() => {
     const outcome = this.room.checkOutcome();

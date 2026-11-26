@@ -15,7 +15,7 @@ import { RoomService } from '../../services/room.service';
                 <wa-button
                   variant="brand"
                   appearance="filled"
-                  [attr.disabled]="!room.storyName().trim() ? '' : null"
+                  [attr.disabled]="!room.storyName().trim() || !room.connected() ? '' : null"
                   (click)="room.startCheck()"
                 >
                   <wa-icon slot="start" name="play"></wa-icon>
@@ -23,23 +23,43 @@ import { RoomService } from '../../services/room.service';
                 </wa-button>
               }
               @case ('checking') {
-                <wa-button variant="neutral" appearance="outlined" (click)="room.cancelCheck()">
+                <wa-button
+                  variant="neutral"
+                  appearance="outlined"
+                  [attr.disabled]="room.connected() ? null : ''"
+                  (click)="room.cancelCheck()"
+                >
                   <wa-icon slot="start" name="xmark"></wa-icon>
                   Cancel check
                 </wa-button>
               }
               @case ('confident') {
-                <wa-button variant="brand" appearance="filled" (click)="room.nextItem()">
+                <wa-button
+                  variant="brand"
+                  appearance="filled"
+                  [attr.disabled]="room.connected() ? null : ''"
+                  (click)="room.nextItem()"
+                >
                   <wa-icon slot="start" name="plus"></wa-icon>
                   Next item
                 </wa-button>
               }
               @case ('paused') {
-                <wa-button variant="brand" appearance="filled" (click)="room.startCheck()">
+                <wa-button
+                  variant="brand"
+                  appearance="filled"
+                  [attr.disabled]="room.connected() ? null : ''"
+                  (click)="room.startCheck()"
+                >
                   <wa-icon slot="start" name="arrow-rotate-left"></wa-icon>
                   Restart check
                 </wa-button>
-                <wa-button variant="neutral" appearance="outlined" (click)="room.skipItem()">
+                <wa-button
+                  variant="neutral"
+                  appearance="outlined"
+                  [attr.disabled]="room.connected() ? null : ''"
+                  (click)="room.skipItem()"
+                >
                   <wa-icon slot="start" name="forward"></wa-icon>
                   Skip item
                 </wa-button>
@@ -157,6 +177,7 @@ export class ActionBarComponent {
   });
 
   readonly checkStatus = computed(() => {
+    if (!this.room.connected()) return 'Reconnecting…';
     switch (this.room.checkPhase()) {
       case 'setup':
         return this.room.storyName().trim() ? 'Ready to check.' : 'Name the item to start.';

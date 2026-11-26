@@ -77,7 +77,7 @@ import { ConfidenceCheckComponent } from './confidence-check/confidence-check';
                 [attr.appearance]="room.mode() === m.value ? 'filled' : 'outlined'"
                 role="radio"
                 [attr.aria-checked]="room.mode() === m.value"
-                [attr.disabled]="room.checkPhase() === 'checking' ? '' : null"
+                [attr.disabled]="room.checkPhase() === 'checking' || !room.connected() ? '' : null"
                 (click)="room.setMode(m.value)"
               >
                 {{ m.label }}
@@ -220,8 +220,15 @@ export class RoomComponent implements OnInit, OnDestroy {
   });
 
   constructor() {
+    // Confidence check: celebrate only when we watched the check finish, not on load/join
+    let lastCheckPhase = this.room.checkPhase();
     effect(() => {
-      if (this.hasConsensus() || this.room.checkPhase() === 'confident') {
+      const phase = this.room.checkPhase();
+      if (phase === 'confident' && lastCheckPhase === 'checking') this.fireConfetti();
+      lastCheckPhase = phase;
+    });
+    effect(() => {
+      if (this.hasConsensus()) {
         if (!this.confettiFired) {
           this.confettiFired = true;
           this.fireConfetti();

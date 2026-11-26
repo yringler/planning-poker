@@ -1,7 +1,20 @@
-import { Injectable, signal, computed, DestroyRef, inject, effect } from '@angular/core';
+import { Injectable, signal, computed, DestroyRef, inject } from '@angular/core';
 import * as Y from 'yjs';
 import YProvider from 'y-partyserver/provider';
 import { environment } from '../../environments/environment';
+import {
+  CHECK_KEY,
+  CONFIDENCE_MAP,
+  ITEM_URL_KEY,
+  MODE_KEY,
+  checkPhase,
+  type CheckAction,
+  type CheckState,
+  type ClientMessage,
+  type HistoryEntry,
+  type RoomMode,
+  type ServerMessage,
+} from '../shared/confidence-protocol';
 
 export interface Player {
   name: string;
@@ -11,54 +24,15 @@ export interface Player {
   offline?: boolean;
 }
 
-export type RoomMode = 'points' | 'confidence';
-
-/** Derived state of a confidence check. `setup` = item being prepared, no check running. */
-export type CheckPhase = 'setup' | 'checking' | 'confident' | 'paused';
-
-/** Fixed length of a confidence check. */
-export const CHECK_DURATION_MS = 60_000;
-
-/**
- * How long a non-leader client waits before performing a shared transition (timeout or
- * all-confident) itself, in case the leader is gone or slow. Transitions are idempotent.
- */
-const TRANSITION_FALLBACK_MS = 2_000;
-
-/** Result of one check round, written once when the round ends (single key → coherent LWW). */
-export interface CheckOutcome {
-  round: number;
-  result: 'confident' | 'paused';
-  /** When the round ended (freezes the timer display). */
-  at: number;
-  /** peerId → name of players who were not confident when time ran out. */
-  notConfident: Record<string, string>;
-  /** peerIds of players who were confident when the round ended. */
-  confident: string[];
-}
-
-/** One check of the current item that timed out with people not confident. */
-export interface CheckAttempt {
-  check: number;
-  notConfident: string[];
-}
-
-export interface HistoryEntry {
-  story: string;
-  timestamp: number;
-  votes: Record<string, string>;
-  players: Record<string, string>;
-  /** Missing = point-voting round. */
-  kind?: 'confidence';
-  /** Confidence entries: stable item id, used to drop duplicate concurrent inserts. */
-  id?: string;
-  url?: string;
-  result?: 'confident' | 'skipped';
-  /** Number of checks run for the item. */
-  checks?: number;
-  /** Checks that ended paused, with who wasn't confident. */
-  attempts?: CheckAttempt[];
-}
+export type {
+  CheckAttempt,
+  CheckOutcome,
+  CheckPhase,
+  CheckState,
+  HistoryEntry,
+  RoomMode,
+} from '../shared/confidence-protocol';
+export { CHECK_DURATION_MS } from '../shared/confidence-protocol';
 
 @Injectable({ providedIn: 'root' })
 export class RoomService {
@@ -78,32 +52,27 @@ export class RoomService {
   readonly timerRemainingOnPause = signal(0);
   readonly timerVisible = signal(false);
 
-  // --- Confidence check state (all mirrored from the `session` map / `confidence` map) ---
+  // --- Confidence check state (mirrored from the doc; `mode`/`check` are server-written) ---
   /** Missing in the doc (older rooms) = point voting. */
   readonly mode = signal<RoomMode>('points');
   readonly itemUrl = signal('');
-  private readonly itemId = signal('');
-  /** Incremented on every (re)start; confidence values and outcomes are tagged with it. */
-  readonly checkRound = signal(0);
-  readonly checkStartedAt = signal<number | null>(null);
-  readonly checkOutcome = signal<CheckOutcome | null>(null);
-  readonly checkLog = signal<CheckAttempt[]>([]);
+  private readonly check = signal<CheckState | null>(null);
+  readonly checkRound = computed(() => this.check()?.round ?? 0);
+  /** Server-clock start of the current round. */
+  readonly checkStartedAt = computed(() => this.check()?.startedAt ?? null);
+  readonly checkOutcome = computed(() => this.check()?.outcome ?? null);
+  readonly checkLog = computed(() => this.check()?.log ?? []);
+  readonly checkPhase = computed(() => checkPhase(this.mode(), this.check()));
   /** peerId → round number in which that peer marked themselves confident. */
   private readonly confidenceRaw = signal<Record<string, number>>({});
-  /** True when this client has the lowest awareness clientID, so it performs transitions first. */
-  private readonly isLeader = signal(false);
+  /** Estimated server clock minus local clock, in ms (from the server's `time` messages). */
+  readonly serverOffset = signal(0);
   /** Local-only, short-lived message after this client skipped an item. */
   readonly skipNotice = signal<string | null>(null);
   private skipNoticeTimer: ReturnType<typeof setTimeout> | null = null;
-  /** When this client connected; used to tell a player they joined mid-check. */
-  readonly joinedAt = signal(0);
-
-  readonly checkPhase = computed<CheckPhase>(() => {
-    if (this.mode() !== 'confidence' || this.checkStartedAt() == null) return 'setup';
-    const outcome = this.checkOutcome();
-    if (outcome && outcome.round === this.checkRound()) return outcome.result;
-    return 'checking';
-  });
+  /** True when this client first saw the current round already running (joined mid-check). */
+  readonly joinedMidCheck = signal(false);
+  private roomCode = '';
 
   /** peerIds confident in the current round (values from older rounds are ignored). */
   readonly confidentIds = computed(() => {
@@ -112,25 +81,18 @@ export class RoomService {
     return new Set(Object.keys(raw).filter((id) => raw[id] === round));
   });
 
-  readonly uniquePlayers = computed(() => {
-    const confidenceMode = this.mode() === 'confidence';
-    // In confidence mode "has voted" means confident this round; point votes are ignored.
-    const confident = this.confidentIds();
-    const votes = confidenceMode
-      ? Object.fromEntries([...confident].map((id) => [id, 'confident']))
-      : this.votes();
+  readonly uniquePlayers = computed(() =>
+    this.mode() === 'confidence' ? this.confidencePlayers() : this.pointPlayers(),
+  );
+
+  /** Point voting: deduped by name, keeping departed voters until the round is cleared. */
+  private readonly pointPlayers = computed(() => {
+    const votes = this.votes();
     const names = this.peerNames();
     const online = this.players();
     const onlineIds = new Set(online.map((p) => p.peerId));
-    // Players who voted and then left: keep them (and their vote) until the round is cleared.
-    // In a paused confidence check, keep the revealed not-confident players instead.
-    const outcome = this.checkOutcome();
-    const keptIds = confidenceMode
-      ? this.checkPhase() === 'paused' && outcome
-        ? Object.keys(outcome.notConfident)
-        : []
-      : Object.keys(votes);
-    const departed: Player[] = keptIds
+    // Players who voted and then left: keep them (and their vote) until the round is cleared
+    const departed: Player[] = Object.keys(votes)
       .filter((peerId) => !onlineIds.has(peerId))
       .map((peerId) => ({ name: names[peerId] ?? 'Unknown', peerId, offline: true }));
 
@@ -144,6 +106,32 @@ export class RoomService {
     }
     return Array.from(seen.values());
   });
+
+  /**
+   * Confidence check: deduped by peerId (same as the server's count), so two people with the
+   * same name both count. In a pause, revealed not-confident players who left stay listed.
+   */
+  private readonly confidencePlayers = computed(() => {
+    const names = this.peerNames();
+    const byPeer = new Map<string, Player>();
+    for (const p of this.players()) {
+      const existing = byPeer.get(p.peerId);
+      // Several tabs of one browser: observer in any tab wins (matches the server)
+      byPeer.set(
+        p.peerId,
+        existing ? { ...existing, observer: existing.observer || p.observer } : p,
+      );
+    }
+    const outcome = this.checkOutcome();
+    if (this.checkPhase() === 'paused' && outcome) {
+      for (const [peerId, name] of Object.entries(outcome.notConfident)) {
+        if (!byPeer.has(peerId)) {
+          byPeer.set(peerId, { name: names[peerId] ?? name, peerId, offline: true });
+        }
+      }
+    }
+    return Array.from(byPeer.values());
+  });
   readonly onlineCount = computed(() => this.uniquePlayers().filter((p) => !p.offline).length);
 
   /** Who a confidence check counts: connected, non-observer, deduped by name. */
@@ -154,10 +142,6 @@ export class RoomService {
     const confident = this.confidentIds();
     return this.checkPlayers().filter((p) => confident.has(p.peerId)).length;
   });
-  readonly allConfident = computed(() => {
-    const total = this.checkPlayers().length;
-    return total > 0 && this.confidentCount() === total;
-  });
   readonly amConfident = computed(() => this.confidentIds().has(this.myPeerId()));
   private readonly history = signal<HistoryEntry[]>([]);
   readonly myPeerId = signal('');
@@ -165,16 +149,9 @@ export class RoomService {
   readonly isObserver = signal(false);
 
   readonly resolvedHistory = computed(() => {
-    const currentPlayers = this.uniquePlayers().filter((p) => !p.offline);
+    const currentPlayers = this.pointPlayers().filter((p) => !p.offline);
     const names = this.peerNames();
-    // Two clients may record the same confidence item concurrently; keep the first copy.
-    const seenIds = new Set<string>();
-    const history = this.history().filter((entry) => {
-      if (!entry.id) return true;
-      if (seenIds.has(entry.id)) return false;
-      seenIds.add(entry.id);
-      return true;
-    });
+    const history = this.history();
 
     const onlineNameCount = new Map<string, number>();
     for (const p of currentPlayers) {
@@ -211,43 +188,28 @@ export class RoomService {
     });
   });
 
-  constructor() {
-    // Timeout: when the shared deadline passes, end the round as paused (or confident).
-    effect((onCleanup) => {
-      const startedAt = this.checkStartedAt();
-      if (this.checkPhase() !== 'checking' || startedAt == null) return;
-      const round = this.checkRound();
-      const delay =
-        Math.max(0, startedAt + CHECK_DURATION_MS - Date.now()) +
-        (this.isLeader() ? 0 : TRANSITION_FALLBACK_MS);
-      const id = setTimeout(() => this.endCheck(round, true), delay);
-      onCleanup(() => clearTimeout(id));
-    });
-
-    // Early finish: as soon as every counted player is confident.
-    effect((onCleanup) => {
-      if (this.checkPhase() !== 'checking' || !this.allConfident()) return;
-      const round = this.checkRound();
-      const id = setTimeout(
-        () => this.endCheck(round, false),
-        this.isLeader() ? 0 : TRANSITION_FALLBACK_MS,
-      );
-      onCleanup(() => clearTimeout(id));
-    });
-  }
-
   connect(roomCode: string, playerName: string): void {
     this.disconnect();
 
     this.doc = new Y.Doc();
     const peerId = this.getOrCreatePeerId();
     this.myPeerId.set(peerId);
-    this.joinedAt.set(Date.now());
+    this.roomCode = roomCode;
+    let synced = false;
 
     // `party` is the kebab-cased Durable Object binding name in wrangler.jsonc
     this.provider = new YProvider(environment.partyHost, `planning-poker-${roomCode}`, this.doc, {
       party: 'planning-poker',
     });
+    this.provider.on('status', ({ status }: { status: string }) => {
+      this.connected.set(status === 'connected');
+    });
+    this.provider.on('synced', (isSynced: boolean) => {
+      if (!isSynced || synced) return;
+      synced = true;
+      initSession();
+    });
+    this.provider.on('custom-message', (raw: string) => this.onServerMessage(raw));
 
     // Set awareness
     const savedObserver = localStorage.getItem('pp-observer') === 'true';
@@ -258,29 +220,33 @@ export class RoomService {
     const votesMap = this.doc.getMap('votes');
     const namesMap = this.doc.getMap<string>('names');
     const historyArray = this.doc.getArray<HistoryEntry>('history');
-    const confidenceMap = this.doc.getMap<number>('confidence');
+    const confidenceMap = this.doc.getMap<number>(CONFIDENCE_MAP);
 
-    // Initialize session if empty
-    this.doc.transact(() => {
-      if (namesMap.get(peerId) !== playerName) {
-        namesMap.set(peerId, playerName);
-      }
-      if (!sessionMap.has('phase')) {
-        sessionMap.set('phase', 'voting');
-      }
-      if (!sessionMap.has('storyName')) {
-        sessionMap.set('storyName', '');
-      }
-      if (!sessionMap.has('timerDuration')) {
-        sessionMap.set('timerDuration', 60);
-      }
-      if (!sessionMap.has('timerState')) {
-        sessionMap.set('timerState', 'idle');
-      }
-      if (!sessionMap.has('timerVisible')) {
-        sessionMap.set('timerVisible', false);
-      }
-    });
+    // Initialize session if empty. Only after the first sync: writing defaults into the empty
+    // local doc would race with (and could overwrite) the room's existing values.
+    const initSession = () => {
+      if (!this.doc) return;
+      this.doc.transact(() => {
+        if (namesMap.get(peerId) !== playerName) {
+          namesMap.set(peerId, playerName);
+        }
+        if (!sessionMap.has('phase')) {
+          sessionMap.set('phase', 'voting');
+        }
+        if (!sessionMap.has('storyName')) {
+          sessionMap.set('storyName', '');
+        }
+        if (!sessionMap.has('timerDuration')) {
+          sessionMap.set('timerDuration', 60);
+        }
+        if (!sessionMap.has('timerState')) {
+          sessionMap.set('timerState', 'idle');
+        }
+        if (!sessionMap.has('timerVisible')) {
+          sessionMap.set('timerVisible', false);
+        }
+      });
+    };
 
     // Observe session map
     const syncSession = () => {
@@ -291,13 +257,10 @@ export class RoomService {
       this.timerState.set((sessionMap.get('timerState') as 'idle' | 'running' | 'paused') ?? 'idle');
       this.timerRemainingOnPause.set((sessionMap.get('timerRemainingOnPause') as number) ?? 0);
       this.timerVisible.set((sessionMap.get('timerVisible') as boolean) ?? false);
-      this.mode.set(sessionMap.get('mode') === 'confidence' ? 'confidence' : 'points');
-      this.itemUrl.set((sessionMap.get('itemUrl') as string) ?? '');
-      this.itemId.set((sessionMap.get('itemId') as string) ?? '');
-      this.checkRound.set((sessionMap.get('checkRound') as number) ?? 0);
-      this.checkStartedAt.set((sessionMap.get('checkStartedAt') as number) ?? null);
-      this.checkOutcome.set((sessionMap.get('checkOutcome') as CheckOutcome) ?? null);
-      this.checkLog.set((sessionMap.get('checkLog') as CheckAttempt[]) ?? []);
+      this.mode.set(sessionMap.get(MODE_KEY) === 'confidence' ? 'confidence' : 'points');
+      this.itemUrl.set((sessionMap.get(ITEM_URL_KEY) as string) ?? '');
+      this.check.set((sessionMap.get(CHECK_KEY) as CheckState) ?? null);
+      this.trackMidCheckJoin(!synced);
     };
     sessionMap.observe(syncSession);
     syncSession();
@@ -338,9 +301,7 @@ export class RoomService {
     const syncPlayers = () => {
       const states = this.provider!.awareness.getStates();
       const playerList: Player[] = [];
-      let lowestClientId = Infinity;
-      states.forEach((state: Record<string, unknown>, clientId: number) => {
-        if (state?.['peerId']) lowestClientId = Math.min(lowestClientId, clientId);
+      states.forEach((state: Record<string, unknown>) => {
         if (state?.['name'] && state?.['peerId']) {
           playerList.push({
             name: state['name'] as string,
@@ -350,12 +311,9 @@ export class RoomService {
         }
       });
       this.players.set(playerList);
-      this.isLeader.set(lowestClientId === this.doc?.clientID);
     };
     this.provider.awareness.on('change', syncPlayers);
     syncPlayers();
-
-    this.connected.set(true);
 
     this.destroyRef.onDestroy(() => this.disconnect());
   }
@@ -384,13 +342,13 @@ export class RoomService {
     this.timerVisible.set(false);
     this.mode.set('points');
     this.itemUrl.set('');
-    this.itemId.set('');
-    this.checkRound.set(0);
-    this.checkStartedAt.set(null);
-    this.checkOutcome.set(null);
-    this.checkLog.set([]);
+    this.check.set(null);
     this.confidenceRaw.set({});
-    this.isLeader.set(false);
+    this.serverOffset.set(0);
+    this.joinedMidCheck.set(false);
+    if (this.skipNoticeTimer) clearTimeout(this.skipNoticeTimer);
+    this.skipNoticeTimer = null;
+    this.skipNotice.set(null);
   }
 
   toggleObserver(): void {
@@ -407,7 +365,7 @@ export class RoomService {
     if (next) {
       // Remove any existing vote when becoming an observer
       this.doc?.getMap('votes').delete(this.myPeerId());
-      this.doc?.getMap('confidence').delete(this.myPeerId());
+      this.doc?.getMap(CONFIDENCE_MAP).delete(this.myPeerId());
     }
   }
 
@@ -565,57 +523,50 @@ export class RoomService {
   }
 
   // --- Confidence check ---
+  // Clients only *request* check transitions; the Durable Object performs them (single
+  // writer, server clock, server-side deadline and all-confident detection).
+
+  /** Current time on the server's clock, as estimated from its `time` messages. */
+  serverNow(): number {
+    return Date.now() + this.serverOffset();
+  }
 
   setMode(mode: RoomMode): void {
-    if (!this.doc || mode === this.mode() || this.checkPhase() === 'checking') return;
-    const sessionMap = this.doc.getMap('session');
-    const itemDone = this.checkPhase() === 'confident';
-    this.doc.transact(() => {
-      sessionMap.set('mode', mode);
-      // Leave any finished/paused check behind; the item name is kept unless it's done.
-      this.clearCheck(itemDone);
-    });
+    if (mode === this.mode() || this.checkPhase() === 'checking') return;
+    this.send({ type: 'mode', mode });
   }
 
   updateItemUrl(url: string): void {
-    this.doc?.getMap('session').set('itemUrl', url);
+    this.doc?.getMap('session').set(ITEM_URL_KEY, url);
   }
 
-  /** Starts (or restarts) the check for the current item: everyone not confident, full timer. */
+  /** Starts (or restarts) the check for the current item. */
   startCheck(): void {
-    if (!this.doc) return;
-    const sessionMap = this.doc.getMap('session');
-    this.doc.transact(() => {
-      if (sessionMap.get('mode') !== 'confidence') return;
-      if (this.readPhase() === 'checking') return;
-      if (!((sessionMap.get('storyName') as string) ?? '').trim()) return;
-      this.clearConfidence();
-      sessionMap.set('checkRound', ((sessionMap.get('checkRound') as number) ?? 0) + 1);
-      sessionMap.set('checkStartedAt', Date.now());
-      sessionMap.set('checkOutcome', null);
-      sessionMap.set('itemChecks', ((sessionMap.get('itemChecks') as number) ?? 0) + 1);
-      if (!sessionMap.get('itemId')) sessionMap.set('itemId', crypto.randomUUID());
-    });
+    this.sendCheck('start');
   }
 
   /** Abandons the running check without recording it. */
   cancelCheck(): void {
-    if (!this.doc) return;
-    this.doc.transact(() => {
-      if (this.readPhase() !== 'checking') return;
-      const sessionMap = this.doc!.getMap('session');
-      sessionMap.set('checkStartedAt', null);
-      sessionMap.set('checkOutcome', null);
-      // A cancelled check doesn't count towards the item's checks
-      const checks = (sessionMap.get('itemChecks') as number) ?? 1;
-      sessionMap.set('itemChecks', Math.max(0, checks - 1));
-      this.clearConfidence();
-    });
+    this.sendCheck('cancel');
+  }
+
+  /** Records an unresolved (paused) item as not confident and moves on. */
+  skipItem(): void {
+    if (this.checkPhase() !== 'paused' || !this.sendCheck('skip')) return;
+    this.skipNotice.set('Skipped. Recorded as not confident.');
+    if (this.skipNoticeTimer) clearTimeout(this.skipNoticeTimer);
+    this.skipNoticeTimer = setTimeout(() => this.skipNotice.set(null), 4000);
+  }
+
+  /** Clears the confirmed item so the next one can be set up. */
+  nextItem(): void {
+    this.sendCheck('next');
   }
 
   setConfident(confident: boolean): void {
-    if (!this.doc || this.isObserver() || this.checkPhase() !== 'checking') return;
-    const confidenceMap = this.doc.getMap<number>('confidence');
+    if (!this.doc || !this.connected() || this.isObserver()) return;
+    if (this.checkPhase() !== 'checking') return;
+    const confidenceMap = this.doc.getMap<number>(CONFIDENCE_MAP);
     if (confident) {
       confidenceMap.set(this.myPeerId(), this.checkRound());
     } else {
@@ -623,129 +574,60 @@ export class RoomService {
     }
   }
 
-  /** Records an unresolved (paused) item as not confident and moves on. */
-  skipItem(): void {
-    if (!this.doc) return;
-    let skipped = false;
-    this.doc.transact(() => {
-      if (this.readPhase() !== 'paused') return;
-      const log = this.doc!.getMap('session').get('checkLog') as CheckAttempt[];
-      this.insertCheckHistory('skipped', log);
-      this.clearCheck(true);
-      skipped = true;
-    });
-    if (!skipped) return;
-    this.skipNotice.set('Skipped. Recorded as not confident.');
-    if (this.skipNoticeTimer) clearTimeout(this.skipNoticeTimer);
-    this.skipNoticeTimer = setTimeout(() => this.skipNotice.set(null), 4000);
+  private sendCheck(action: CheckAction): boolean {
+    return this.send({ type: 'check', action });
   }
 
-  /** Clears the finished item so the next one can be set up. */
-  nextItem(): void {
-    if (!this.doc) return;
-    this.doc.transact(() => {
-      if (this.readPhase() === 'checking') return;
-      this.clearCheck(true);
-    });
-  }
-
-  /**
-   * Ends round `round` as confident (if everyone counted is) or, on timeout, as paused.
-   * Safe to call from several clients at once: it re-reads the doc and does nothing if the
-   * round already ended or a newer round started.
-   */
-  private endCheck(round: number, timedOut: boolean): void {
-    if (!this.doc) return;
-    const sessionMap = this.doc.getMap('session');
-    this.doc.transact(() => {
-      if (this.readPhase() !== 'checking') return;
-      if ((sessionMap.get('checkRound') as number) !== round) return;
-      const startedAt = sessionMap.get('checkStartedAt') as number;
-      const now = Date.now();
-      if (timedOut && now < startedAt + CHECK_DURATION_MS) return;
-
-      const confidenceMap = this.doc!.getMap<number>('confidence');
-      const players = this.checkPlayers();
-      const confident = players.filter((p) => confidenceMap.get(p.peerId) === round);
-      const allConfident = players.length > 0 && confident.length === players.length;
-      if (!allConfident && !timedOut) return;
-
-      const notConfident: Record<string, string> = {};
-      for (const p of players) {
-        if (confidenceMap.get(p.peerId) !== round) notConfident[p.peerId] = p.name;
-      }
-      const outcome: CheckOutcome = {
-        round,
-        result: allConfident ? 'confident' : 'paused',
-        at: Math.min(now, startedAt + CHECK_DURATION_MS),
-        notConfident,
-        confident: confident.map((p) => p.peerId),
-      };
-      sessionMap.set('checkOutcome', outcome);
-
-      const log = [...((sessionMap.get('checkLog') as CheckAttempt[]) ?? [])];
-      if (allConfident) {
-        this.insertCheckHistory('confident', log);
-      } else {
-        const check = (sessionMap.get('itemChecks') as number) ?? log.length + 1;
-        log.push({ check, notConfident: Object.values(notConfident) });
-        sessionMap.set('checkLog', log);
-      }
-    });
-  }
-
-  private insertCheckHistory(
-    result: 'confident' | 'skipped',
-    log: CheckAttempt[] | undefined,
-  ): void {
-    const sessionMap = this.doc!.getMap('session');
-    const historyArray = this.doc!.getArray<HistoryEntry>('history');
-    const id = (sessionMap.get('itemId') as string) || crypto.randomUUID();
-    if (historyArray.toArray().some((e) => e.id === id)) return;
-    historyArray.insert(0, [
-      {
-        kind: 'confidence',
-        id,
-        story: (sessionMap.get('storyName') as string) || '',
-        url: ((sessionMap.get('itemUrl') as string) ?? '').trim() || undefined,
-        timestamp: Date.now(),
-        votes: {},
-        players: {},
-        result,
-        checks: (sessionMap.get('itemChecks') as number) ?? 0,
-        attempts: log ?? [],
-      },
-    ]);
-  }
-
-  /** Resets check state; with `clearItem`, also the item (name, link, id, log). */
-  private clearCheck(clearItem: boolean): void {
-    const sessionMap = this.doc!.getMap('session');
-    sessionMap.set('checkStartedAt', null);
-    sessionMap.set('checkOutcome', null);
-    this.clearConfidence();
-    if (clearItem) {
-      sessionMap.set('storyName', '');
-      sessionMap.set('itemUrl', '');
-      sessionMap.set('itemId', crypto.randomUUID());
-      sessionMap.set('checkLog', []);
-      sessionMap.set('itemChecks', 0);
+  /** Sends a request to the server; returns false (and does nothing) while disconnected. */
+  private send(msg: ClientMessage): boolean {
+    if (!this.provider || !this.connected()) return false;
+    try {
+      this.provider.sendMessage(JSON.stringify(msg));
+      return true;
+    } catch {
+      return false;
     }
   }
 
-  private clearConfidence(): void {
-    const confidenceMap = this.doc!.getMap('confidence');
-    Array.from(confidenceMap.keys()).forEach((k) => confidenceMap.delete(k));
+  private onServerMessage(raw: string): void {
+    let msg: ServerMessage;
+    try {
+      msg = JSON.parse(raw) as ServerMessage;
+    } catch {
+      return;
+    }
+    if (msg.type === 'time' && typeof msg.now === 'number') {
+      // Ignores one-way latency (tens of ms), which is fine for a 1-minute countdown
+      this.serverOffset.set(msg.now - Date.now());
+    }
   }
 
-  /** Check phase read straight from the doc (inside transactions, before signals update). */
-  private readPhase(): CheckPhase {
-    const sessionMap = this.doc!.getMap('session');
-    if (sessionMap.get('mode') !== 'confidence') return 'setup';
-    if (sessionMap.get('checkStartedAt') == null) return 'setup';
-    const outcome = sessionMap.get('checkOutcome') as CheckOutcome | null;
-    if (outcome && outcome.round === sessionMap.get('checkRound')) return outcome.result;
-    return 'checking';
+  /**
+   * Remembers (per tab, across reloads) whether this client first saw the current round
+   * already running, i.e. joined mid-check rather than being there when it started.
+   */
+  private trackMidCheckJoin(initialLoad: boolean): void {
+    if (this.checkPhase() !== 'checking') {
+      this.joinedMidCheck.set(false);
+      return;
+    }
+    const key = `pp-check-seen-${this.roomCode}`;
+    const round = this.checkRound();
+    let seen: { round: number; mid: boolean } | null = null;
+    try {
+      seen = JSON.parse(sessionStorage.getItem(key) ?? 'null');
+    } catch {
+      seen = null;
+    }
+    if (seen?.round !== round) {
+      seen = { round, mid: initialLoad };
+      try {
+        sessionStorage.setItem(key, JSON.stringify(seen));
+      } catch {
+        // Storage unavailable: the hint just may reappear after a reload
+      }
+    }
+    this.joinedMidCheck.set(seen.mid);
   }
 
   private getOrCreatePeerId(): string {

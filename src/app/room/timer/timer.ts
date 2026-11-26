@@ -2,10 +2,12 @@ import {
   ApplicationRef,
   Component,
   CUSTOM_ELEMENTS_SCHEMA,
-  DestroyRef,
+  effect,
   inject,
   input,
+  OnInit,
   signal,
+  untracked,
 } from '@angular/core';
 import { RoomService } from '../../services/room.service';
 
@@ -100,49 +102,51 @@ import { RoomService } from '../../services/room.service';
     }
   `,
 })
-export class TimerComponent {
+export class TimerComponent implements OnInit {
   readonly isObserver = input(false);
   /**
-   * Fixed countdown mode (confidence check): counts down to this timestamp, no controls.
-   * When unset, the timer shows the room's shared point-voting timer.
+   * Fixed countdown mode (confidence check): counts down to this local-clock timestamp, with
+   * no controls. When unset, the timer shows the room's shared point-voting timer.
    */
   readonly endTime = input<number | null>(null);
   /** With `endTime`: freeze the display at the time remaining at this moment. */
   readonly stoppedAt = input<number | null>(null);
+  /** With `endTime`: never show more than this (guards against clock-offset error). */
+  readonly maxSeconds = input(Infinity);
   readonly room = inject(RoomService);
-  private destroyRef = inject(DestroyRef);
   private appRef = inject(ApplicationRef);
-  private intervalId: ReturnType<typeof setInterval> | null = null;
 
   readonly displayTime = signal('1:00');
   readonly isWarning = signal(false);
   readonly isFinished = signal(false);
 
   constructor() {
-    this.startTicking();
-    this.destroyRef.onDestroy(() => this.stopTicking());
+    // (Re)start ticking when the inputs change; a frozen fixed countdown doesn't tick at all.
+    effect((onCleanup) => {
+      const fixed = this.endTime() != null;
+      const frozen = fixed && this.stoppedAt() != null;
+      untracked(() => this.update());
+      if (frozen) return;
+      const id = setInterval(() => {
+        this.update();
+        // Fixed mode only sets signals, which schedule change detection on their own
+        if (!fixed) this.appRef.tick();
+      }, 250);
+      onCleanup(() => clearInterval(id));
+    });
   }
 
-  private startTicking(): void {
+  ngOnInit(): void {
+    // Inputs are set by now: render the right value on the first frame
     this.update();
-    this.intervalId = setInterval(() => {
-      this.update();
-      this.appRef.tick();
-    }, 250);
-  }
-
-  private stopTicking(): void {
-    if (this.intervalId !== null) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
-    }
   }
 
   private update(): void {
     const fixedEnd = this.endTime();
     if (fixedEnd != null) {
       const now = this.stoppedAt() ?? Date.now();
-      this.formatTime(Math.max(0, Math.ceil((fixedEnd - now) / 1000)));
+      const remaining = Math.ceil((fixedEnd - now) / 1000);
+      this.formatTime(Math.min(this.maxSeconds(), Math.max(0, remaining)));
       return;
     }
     const state = this.room.timerState();
