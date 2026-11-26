@@ -19,7 +19,8 @@ import { RoomService } from '../../services/room.service';
         style="align-items: center; flex-wrap: wrap; gap: var(--wa-space-s)"
       >
         <span class="timer-display" [class.warning]="isWarning()">{{ displayTime() }}</span>
-        @if (isObserver()) {
+        <ng-content />
+        @if (isObserver() && endTime() == null) {
           <div slot="end" class="wa-cluster wa-gap-xs">
             @if (room.timerState() === 'idle') {
               <wa-button size="small" variant="neutral" appearance="outlined" (click)="room.adjustDuration(-60)">
@@ -101,6 +102,13 @@ import { RoomService } from '../../services/room.service';
 })
 export class TimerComponent {
   readonly isObserver = input(false);
+  /**
+   * Fixed countdown mode (confidence check): counts down to this timestamp, no controls.
+   * When unset, the timer shows the room's shared point-voting timer.
+   */
+  readonly endTime = input<number | null>(null);
+  /** With `endTime`: freeze the display at the time remaining at this moment. */
+  readonly stoppedAt = input<number | null>(null);
   readonly room = inject(RoomService);
   private destroyRef = inject(DestroyRef);
   private appRef = inject(ApplicationRef);
@@ -131,6 +139,12 @@ export class TimerComponent {
   }
 
   private update(): void {
+    const fixedEnd = this.endTime();
+    if (fixedEnd != null) {
+      const now = this.stoppedAt() ?? Date.now();
+      this.formatTime(Math.max(0, Math.ceil((fixedEnd - now) / 1000)));
+      return;
+    }
     const state = this.room.timerState();
     const endTime = this.room.timerEndTime();
 
