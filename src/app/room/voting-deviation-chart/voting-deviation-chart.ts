@@ -14,7 +14,7 @@ const COLORS = [
   providers: [provideCharts(withDefaultRegisterables())],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
-    @if (room.resolvedHistory().length > 1) {
+    @if (pointHistory().length > 1) {
       <div class="wa-stack wa-gap-s">
         <div>
           <h2>Voting Deviation</h2>
@@ -113,8 +113,13 @@ export class VotingDeviationChartComponent {
     },
   };
 
+  /** Point-voting rounds only; confidence checks have no numbers to chart. */
+  readonly pointHistory = computed(() =>
+    this.room.resolvedHistory().filter((e) => e.kind !== 'confidence'),
+  );
+
   readonly chartData = computed((): ChartData<'line'> => {
-    const history = [...this.room.resolvedHistory()].reverse();
+    const history = [...this.pointHistory()].reverse();
 
     const playerNames = new Set<string>();
     for (const entry of history) {

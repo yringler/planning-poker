@@ -1,6 +1,7 @@
 import { Component, inject, signal, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { DatePipe, KeyValuePipe } from '@angular/common';
-import { RoomService } from '../../services/room.service';
+import { HistoryEntry, RoomService } from '../../services/room.service';
+import { parseTicketUrl } from '../confidence-check/ticket-url';
 
 @Component({
   selector: 'app-voting-history',
@@ -29,33 +30,58 @@ import { RoomService } from '../../services/room.service';
               } @else {
                 <div class="wa-cluster wa-gap-xs story-wrap" style="align-items: center">
                   <span class="story-name">{{ entry.story || 'Untitled' }}</span>
+                  @if (ticket(entry.url); as t) {
+                    <a
+                      class="ticket-link"
+                      [href]="t.href"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      [title]="'Open ticket (' + t.host + ')'"
+                    >
+                      <wa-icon name="link"></wa-icon>
+                    </a>
+                  }
                   <wa-icon name="pencil" class="action-icon edit" (click)="startEdit(entry.timestamp, entry.story || '')"></wa-icon>
                   <wa-icon name="trash" class="action-icon delete" (click)="deleteEntry(entry.timestamp)"></wa-icon>
                 </div>
               }
               <div class="meta">
                 <span class="timestamp">{{ entry.timestamp | date:'M/d/yyyy h:mm a' }}</span>
-                <span class="average">
-                  {{ calcAverage(entry.votes) }}
-                  @if (averageValue(entry.votes); as value) {
-                    <wa-copy-button
-                      [attr.value]="value"
-                      copy-label="Copy points"
-                      success-label="Copied!"
-                    ></wa-copy-button>
+                @if (entry.kind === 'confidence') {
+                  @if (entry.result === 'confident') {
+                    <wa-tag variant="success" appearance="filled" size="small">Confident</wa-tag>
+                  } @else {
+                    <wa-tag variant="warning" appearance="filled" size="small">
+                      Not confident (skipped)
+                    </wa-tag>
                   }
-                </span>
+                } @else {
+                  <span class="average">
+                    {{ calcAverage(entry.votes) }}
+                    @if (averageValue(entry.votes); as value) {
+                      <wa-copy-button
+                        [attr.value]="value"
+                        copy-label="Copy points"
+                        success-label="Copied!"
+                      ></wa-copy-button>
+                    }
+                  </span>
+                }
               </div>
             </div>
             <wa-divider style="margin: var(--wa-space-s) 0"></wa-divider>
-            <div class="wa-grid wa-gap-2xs" style="--min-column-size: 160px">
-              @for (vote of entry.votes | keyvalue; track vote.key) {
-                <div class="vote-entry">
-                  <span class="voter-name">{{ entry.players[vote.key] || 'Unknown' }}</span>
-                  <span class="vote-value">{{ vote.value }}</span>
-                </div>
-              }
-            </div>
+            @if (entry.kind === 'confidence') {
+              <span class="check-summary">{{ checkSummary(entry) }}</span>
+            } @else {
+              <div class="wa-grid wa-gap-2xs" style="--min-column-size: 160px">
+                @for (vote of entry.votes | keyvalue; track vote.key) {
+                  <div class="vote-entry">
+                    <span class="voter-name">{{ entry.players[vote.key] || 'Unknown' }}</span>
+                    <span class="vote-value">{{ vote.value }}</span>
+                  </div>
+                }
+              </div>
+            }
           </wa-card>
         }
       </div>
@@ -145,6 +171,16 @@ import { RoomService } from '../../services/room.service';
       font-size: 0.875rem;
     }
 
+    .ticket-link {
+      color: var(--wa-color-brand-fill-loud);
+      font-size: 0.85rem;
+    }
+
+    .check-summary {
+      font-size: 0.875rem;
+      color: var(--wa-color-neutral-on-quiet);
+    }
+
     .vote-entry {
       display: flex;
       justify-content: space-between;
@@ -195,6 +231,25 @@ export class VotingHistoryComponent {
 
   deleteEntry(timestamp: number): void {
     this.room.deleteHistoryEntry(timestamp);
+  }
+
+  readonly ticket = parseTicketUrl;
+
+  /** e.g. "Checks: 2 · Not confident on check 1: Dana, Lee" (skipped: "Last check: Dana"). */
+  checkSummary(entry: HistoryEntry): string {
+    const attempts = entry.attempts ?? [];
+    const parts = [`Checks: ${entry.checks ?? attempts.length}`];
+    if (entry.result === 'skipped') {
+      const last = attempts[attempts.length - 1];
+      if (last?.notConfident.length) parts.push(`Last check: ${last.notConfident.join(', ')}`);
+    } else {
+      for (const a of attempts) {
+        if (a.notConfident.length) {
+          parts.push(`Not confident on check ${a.check}: ${a.notConfident.join(', ')}`);
+        }
+      }
+    }
+    return parts.join('  ·  ');
   }
 
   averageValue(votes: Record<string, string>): string | null {

@@ -11,7 +11,7 @@ import {
 import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import confetti from 'canvas-confetti';
-import { RoomService } from '../services/room.service';
+import { RoomMode, RoomService } from '../services/room.service';
 import { SessionHeaderComponent } from './session-header/session-header';
 import { CardGridComponent } from './card-grid/card-grid';
 import { ParticipantsListComponent } from './participants-list/participants-list';
@@ -19,6 +19,7 @@ import { ActionBarComponent } from './action-bar/action-bar';
 import { VotingHistoryComponent } from './voting-history/voting-history';
 import { VotingDeviationChartComponent } from './voting-deviation-chart/voting-deviation-chart';
 import { TimerComponent } from './timer/timer';
+import { ConfidenceCheckComponent } from './confidence-check/confidence-check';
 
 @Component({
   selector: 'app-room',
@@ -31,6 +32,7 @@ import { TimerComponent } from './timer/timer';
     VotingHistoryComponent,
     VotingDeviationChartComponent,
     TimerComponent,
+    ConfidenceCheckComponent,
   ],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
@@ -66,40 +68,67 @@ import { TimerComponent } from './timer/timer';
       <div class="room-container wa-stack wa-gap-l">
         <app-session-header />
 
-        <div class="wa-flank" style="align-items: center; gap: var(--wa-space-s)">
-          <wa-input
-            placeholder="Story name (optional)"
-            [value]="room.storyName()"
-            (input)="room.updateStoryName($any($event.target).value)"
-            style="flex: 1"
-          >
-            <wa-icon slot="start" name="book"></wa-icon>
-          </wa-input>
-          @if (room.isObserver()) {
-            <wa-button
-              slot="end"
-              size="small"
-              variant="neutral"
-              [attr.appearance]="room.timerVisible() ? 'filled' : 'outlined'"
-              (click)="room.toggleTimerVisible()"
-            >
-              <wa-icon slot="start" name="clock"></wa-icon>
-              {{ room.timerVisible() ? 'Hide Timer' : 'Show Timer' }}
-            </wa-button>
+        <div class="mode-switch">
+          <div class="segmented" role="radiogroup" aria-label="Room mode">
+            @for (m of modes; track m.value) {
+              <wa-button
+                size="small"
+                [attr.variant]="room.mode() === m.value ? 'brand' : 'neutral'"
+                [attr.appearance]="room.mode() === m.value ? 'filled' : 'outlined'"
+                role="radio"
+                [attr.aria-checked]="room.mode() === m.value"
+                [attr.disabled]="room.checkPhase() === 'checking' || !room.connected() ? '' : null"
+                (click)="room.setMode(m.value)"
+              >
+                {{ m.label }}
+              </wa-button>
+            }
+          </div>
+          @if (room.checkPhase() === 'checking') {
+            <span class="mode-hint">Finish or cancel this check to change mode</span>
           }
         </div>
 
-        @if (room.timerVisible() && (room.isObserver() || room.timerState() !== 'idle')) {
-          <app-timer [isObserver]="room.isObserver()" />
-        }
+        @if (room.mode() === 'confidence') {
+          <app-confidence-check />
+        } @else {
+          <div class="wa-flank" style="align-items: center; gap: var(--wa-space-s)">
+            <wa-input
+              placeholder="Story name (optional)"
+              [value]="room.storyName()"
+              (input)="room.updateStoryName($any($event.target).value)"
+              style="flex: 1"
+            >
+              <wa-icon slot="start" name="book"></wa-icon>
+            </wa-input>
+            @if (room.isObserver()) {
+              <wa-button
+                slot="end"
+                size="small"
+                variant="neutral"
+                [attr.appearance]="room.timerVisible() ? 'filled' : 'outlined'"
+                (click)="room.toggleTimerVisible()"
+              >
+                <wa-icon slot="start" name="clock"></wa-icon>
+                {{ room.timerVisible() ? 'Hide Timer' : 'Show Timer' }}
+              </wa-button>
+            }
+          </div>
 
-        @if (!room.isObserver()) {
-          <app-card-grid />
+          @if (room.timerVisible() && (room.isObserver() || room.timerState() !== 'idle')) {
+            <app-timer [isObserver]="room.isObserver()" />
+          }
+
+          @if (!room.isObserver()) {
+            <app-card-grid />
+          }
         }
         <app-participants-list />
         <app-action-bar />
         <app-voting-history />
-        <app-voting-deviation-chart />
+        @if (room.mode() !== 'confidence') {
+          <app-voting-deviation-chart />
+        }
       </div>
     }
   `,
@@ -129,6 +158,32 @@ import { TimerComponent } from './timer/timer';
       --spacing: var(--wa-space-xl);
     }
 
+    .mode-switch {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: var(--wa-space-s);
+    }
+
+    .segmented {
+      display: inline-flex;
+    }
+
+    .segmented wa-button:first-child::part(base) {
+      border-top-right-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+
+    .segmented wa-button:last-child::part(base) {
+      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+    }
+
+    .mode-hint {
+      font-size: 0.85rem;
+      color: var(--wa-color-neutral-on-quiet);
+    }
+
     .room-container {
       max-width: 720px;
       margin: 0 auto;
@@ -139,6 +194,11 @@ import { TimerComponent } from './timer/timer';
 export class RoomComponent implements OnInit, OnDestroy {
   readonly room = inject(RoomService);
   private route = inject(ActivatedRoute);
+
+  readonly modes: { value: RoomMode; label: string }[] = [
+    { value: 'points', label: 'Point voting' },
+    { value: 'confidence', label: 'Confidence check' },
+  ];
 
   awaitingName = signal(false);
   pendingName = '';
@@ -160,6 +220,13 @@ export class RoomComponent implements OnInit, OnDestroy {
   });
 
   constructor() {
+    // Confidence check: celebrate only when we watched the check finish, not on load/join
+    let lastCheckPhase = this.room.checkPhase();
+    effect(() => {
+      const phase = this.room.checkPhase();
+      if (phase === 'confident' && lastCheckPhase === 'checking') this.fireConfetti();
+      lastCheckPhase = phase;
+    });
     effect(() => {
       if (this.hasConsensus()) {
         if (!this.confettiFired) {

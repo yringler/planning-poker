@@ -28,6 +28,24 @@ import { RoomService } from '../../services/room.service';
                 <wa-tag variant="neutral" appearance="outlined" size="small">
                   <wa-icon name="eye-slash"></wa-icon> Observer
                 </wa-tag>
+              } @else if (room.mode() === 'confidence') {
+                @switch (checkStatus(player.peerId)) {
+                  @case ('checking') {
+                    <wa-tag variant="neutral" appearance="outlined" size="small">
+                      Checking…
+                    </wa-tag>
+                  }
+                  @case ('confident') {
+                    <wa-tag variant="success" appearance="filled" size="small">
+                      <wa-icon name="circle-check"></wa-icon> Confident
+                    </wa-tag>
+                  }
+                  @case ('not-confident') {
+                    <wa-tag variant="warning" appearance="filled" size="small">
+                      Not confident
+                    </wa-tag>
+                  }
+                }
               } @else if (statusClass(player.peerId) === 'waiting') {
                 <wa-tag variant="neutral" appearance="outlined" size="small">Waiting…</wa-tag>
               } @else if (statusClass(player.peerId) === 'voted') {
@@ -115,7 +133,27 @@ export class ParticipantsListComponent {
     return votes[peerId] != null ? 'Voted ✓' : 'Waiting…';
   }
 
+  /**
+   * Confidence-mode tag. Nothing is shown per person while checking (anonymous), and people
+   * who joined during a pause get no tag.
+   */
+  checkStatus(peerId: string): 'checking' | 'confident' | 'not-confident' | null {
+    const outcome = this.room.checkOutcome();
+    switch (this.room.checkPhase()) {
+      case 'checking':
+        return 'checking';
+      case 'confident':
+      case 'paused':
+        if (outcome?.notConfident[peerId]) return 'not-confident';
+        if (outcome?.confident.includes(peerId)) return 'confident';
+        return null;
+      default:
+        return null;
+    }
+  }
+
   statusClass(peerId: string): string {
+    if (this.room.mode() === 'confidence') return 'none';
     const votes = this.room.votes();
     const phase = this.room.phase();
     if (phase === 'revealed') return 'revealed';
