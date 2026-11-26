@@ -10,7 +10,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 import '@awesome.me/webawesome/dist/components/copy-button/copy-button.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
-import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { appConfig } from './app/app.config';

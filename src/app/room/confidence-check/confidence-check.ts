@@ -78,18 +78,14 @@ import { parseTicketUrl } from './ticket-url';
         @case ('checking') {
           <wa-card appearance="filled" class="panel">
             <div class="wa-stack wa-gap-m">
-              <div class="panel-top">
-                <app-timer [endTime]="endTime()" [maxSeconds]="maxSeconds" />
-                <span class="count" data-testid="confidence-count">
-                  {{ room.confidentCount() }} / {{ total() }} confident
-                </span>
-              </div>
-              <wa-progress-bar [value]="percent()" label="Confident"></wa-progress-bar>
+              <!-- No live tally: a running count leads the witness. The server ends the check
+                   early (with confetti) only once everyone is confident. -->
+              <app-timer [endTime]="endTime()" [maxSeconds]="maxSeconds" />
               <wa-callout variant="neutral" size="small">
                 <wa-icon slot="icon" name="eye-slash"></wa-icon>
                 @if (total() > 1) {
-                  Votes are anonymous until time runs out. If anyone is still not confident at 0:00,
-                  their names are shown.
+                  Answers stay hidden. If everyone is confident, the check ends early. If anyone is
+                  still not confident at 0:00, their names are shown.
                 } @else {
                   If you're still not confident at 0:00, the check pauses for discussion.
                 }
@@ -302,9 +298,6 @@ export class ConfidenceCheckComponent {
 
   readonly phase = this.room.checkPhase;
   readonly total = computed(() => this.room.checkPlayers().length);
-  readonly percent = computed(() =>
-    this.total() === 0 ? 0 : Math.round((this.room.confidentCount() / this.total()) * 100),
-  );
   readonly maxSeconds = CHECK_DURATION_MS / 1000;
   /** Server-stamped deadline converted to this client's clock. */
   readonly endTime = computed(() => {

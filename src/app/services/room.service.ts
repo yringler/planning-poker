@@ -130,10 +130,6 @@ export class RoomService {
   readonly checkPlayers = computed(() =>
     this.uniquePlayers().filter((p) => !p.offline && !p.observer),
   );
-  readonly confidentCount = computed(() => {
-    const confident = this.confidentIds();
-    return this.checkPlayers().filter((p) => confident.has(p.peerId)).length;
-  });
   readonly amConfident = computed(() => this.confidentIds().has(this.myPeerId()));
   private readonly history = signal<HistoryEntry[]>([]);
   readonly myPeerId = signal('');

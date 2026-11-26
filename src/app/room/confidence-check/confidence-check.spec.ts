@@ -28,12 +28,9 @@ beforeEach(() => {
 });
 
 describe('ConfidenceCheckComponent', () => {
-  it('CC-01: percent and total', () => {
-    stub.confidentCount.set(2);
-    expect(c.percent()).toBe(0);
+  it('CC-01: total', () => {
     expect(c.total()).toBe(0);
     stub.checkPlayers.set(players(3));
-    expect(c.percent()).toBe(67);
     expect(c.total()).toBe(3);
   });
 
