@@ -3,6 +3,14 @@
   "name": "planning-poker",
   "main": "party/server.ts",
   "compatibility_date": "2026-10-01",
+  "assets": {
+    // Angular's build output. `npm run build` must run before `wrangler deploy`.
+    "directory": "./dist/planning-poker/browser",
+    // Deep links like /room/ABC123 get index.html so Angular's router handles them.
+    "not_found_handling": "single-page-application",
+    // Only the PartyServer WebSocket path reaches the Worker; everything else is a static asset.
+    "run_worker_first": ["/parties/*"]
+  },
   "durable_objects": {
     "bindings": [{ "name": "PlanningPoker", "class_name": "PlanningPoker" }]
   },
