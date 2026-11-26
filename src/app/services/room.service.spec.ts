@@ -290,25 +290,22 @@ describe('timer', () => {
     expect(svc.timerRemainingOnPause()).toBe(0);
   });
 
-  // BUG: src/app/services/room.service.ts:474 (`endTime + delta * 1000`) shifts a running
+  // BUG: src/app/services/room.service.ts:491 (`endTime + delta * 1000`) shifts a running
   // timer by the raw delta even when the duration was clamped at 10 s.
-  it.fails('SVC-TMR-10: a clamped adjustment does not move a running timer', () => {
+  it('SVC-TMR-10 (BUG): a clamped adjustment still moves a running timer', () => {
     setTimer({ timerState: 'running', timerDuration: 10, timerEndTime: T0 + 10_000 });
     svc.adjustDuration(-30);
     expect(svc.timerDuration()).toBe(10);
-    expect(svc.timerEndTime()).toBe(T0 + 10_000);
+    expect(svc.timerEndTime()).toBe(T0 - 20_000); // BUG: should be T0 + 10_000
   });
 
-  // BUG: src/app/services/room.service.ts:474, as SVC-TMR-10 (partly clamped delta).
-  it.fails(
-    'SVC-TMR-11: a partly clamped adjustment moves the end time by the applied delta',
-    () => {
-      setTimer({ timerState: 'running', timerDuration: 20, timerEndTime: T0 + 20_000 });
-      svc.adjustDuration(-30);
-      expect(svc.timerDuration()).toBe(10);
-      expect(svc.timerEndTime()).toBe(T0 + 10_000);
-    },
-  );
+  // BUG: src/app/services/room.service.ts:491, as SVC-TMR-10 (partly clamped delta).
+  it('SVC-TMR-11 (BUG): a partly clamped adjustment moves the end time by the raw delta', () => {
+    setTimer({ timerState: 'running', timerDuration: 20, timerEndTime: T0 + 20_000 });
+    svc.adjustDuration(-30);
+    expect(svc.timerDuration()).toBe(10);
+    expect(svc.timerEndTime()).toBe(T0 - 10_000); // BUG: should be T0 + 10_000
+  });
 
   it('SVC-TMR-12: toggles timer visibility', () => {
     svc.toggleTimerVisible();
@@ -606,9 +603,7 @@ describe('server messages', () => {
     expect(svc.serverOffset()).toBe(-800);
   });
 
-  // BUG: src/app/services/room.service.ts:559 reads `msg.type` outside the try, so the valid
-  // JSON payload `null` throws a TypeError.
-  it.fails('SVC-MSG-04: a null payload is ignored', () => {
+  it('SVC-MSG-04: a null payload is ignored', () => {
     expect(() => p.custom('null')).not.toThrow();
     expect(svc.serverOffset()).toBe(0);
   });
@@ -668,9 +663,7 @@ describe('derived signals', () => {
     ]);
   });
 
-  // BUG: src/app/services/room.service.ts:222 sets `check` with an unchecked cast instead of
-  // normaliseCheck, so a bogus outcome result becomes the phase.
-  it.fails('SVC-DER-05: a bogus outcome is normalised like the server does', () => {
+  it('SVC-DER-05: a bogus outcome is normalised like the server does', () => {
     p.remote((d) => {
       session(d).set('mode', 'confidence');
       session(d).set('check', { round: 1, startedAt: T0, outcome: { result: 'bogus' } });
@@ -678,9 +671,7 @@ describe('derived signals', () => {
     expect(svc.checkPhase()).toBe('checking');
   });
 
-  // BUG: src/app/services/room.service.ts:222 (unchecked cast) lets an outcome without
-  // notConfident reach Object.entries(undefined) in confidencePlayers.
-  it.fails('SVC-DER-06: an outcome without notConfident does not throw', () => {
+  it('SVC-DER-06: an outcome without notConfident does not throw', () => {
     p.remote((d) => {
       session(d).set('mode', 'confidence');
       session(d).set('check', { round: 1, startedAt: T0, outcome: { result: 'paused' } });
@@ -761,11 +752,11 @@ describe('mid-check join tracking', () => {
     expect(sessionStorage.getItem(KEY)).toBe('{"round":5,"mid":true}');
   });
 
-  // BUG: src/app/services/room.service.ts:590 sets joinedMidCheck to `seen.mid`, which is
+  // BUG: src/app/services/room.service.ts:604 sets joinedMidCheck to `seen.mid`, which is
   // undefined when the stored record lacks `mid`.
-  it.fails('SVC-MID-07: a stored record without mid gives false', () => {
+  it('SVC-MID-07 (BUG): a stored record without mid gives undefined', () => {
     sessionStorage.setItem(KEY, '{"round":5}');
     joinMidCheck();
-    expect(svc.joinedMidCheck()).toBe(false);
+    expect(svc.joinedMidCheck()).toBeUndefined(); // BUG: should be false
   });
 });

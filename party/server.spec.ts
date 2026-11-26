@@ -3,7 +3,6 @@ import * as Y from 'yjs';
 import { D, flush, T0 } from './test/clock';
 import { FakeStorage } from './test/fake-storage';
 import { asConn, createHarness, internals, type Harness } from './test/harness';
-import { FakeConnection } from './test/fake-partyserver';
 import {
   cancel,
   CONFIDENT,
@@ -534,10 +533,9 @@ describe('endCheck', () => {
     expect(h.check().outcome).toMatchObject({ result: 'confident', confident: ['p1'] });
   });
 
-  // BUG: party/server.ts:60-74: PlanningPoker doesn't override onClose. When the leaving
-  // connection's awareness ids weren't recorded (hello-only ownership), y-partyserver removes no
-  // state, no awareness change fires and nothing queues an evaluation until the alarm.
-  it.fails('SRV-END-08: a hello-only player who leaves stops counting', async () => {
+  // When the leaving connection's awareness ids weren't recorded (hello-only ownership),
+  // y-partyserver removes no state and no awareness change fires; onClose re-evaluates.
+  it('SRV-END-08: a hello-only player who leaves stops counting', async () => {
     await h.seed(SETUP);
     const p1 = await h.addPlayer('p1', 'Ann');
     const p2 = await h.addPlayer('p2', 'Bob', { ownership: 'hello' });
@@ -788,6 +786,22 @@ describe('click path over the wire', () => {
     expect(conn.custom()).toEqual([time(T0)]);
   });
 
+  // RoomService flags a server that hasn't sent `time` by the time the client syncs as outdated,
+  // and the client syncs when it gets the reply to its first sync message. Everything here runs
+  // synchronously, so moving `sendTime` after an `await` in onConnect fails this test.
+  it('SRV-WIRE-03: time is sent on connect, before the reply to the sync step 1', () => {
+    const conn = h.addConnection();
+    const sv = Y.encodeStateVector(new Y.Doc());
+    // messageSync (0), messageYjsSyncStep1 (0), varUint8Array(state vector)
+    h.server.onMessage(asConn(conn), new Uint8Array([0, 0, sv.length, ...sv]));
+    const timeAt = conn.sent.findIndex((m) => typeof m === 'string' && m.startsWith('__YPS:'));
+    // messageSync (0), messageYjsSyncStep2 (1)
+    const step2At = conn.sent.findIndex((m) => m instanceof Uint8Array && m[0] === 0 && m[1] === 1);
+    expect(step2At).toBeGreaterThan(-1);
+    expect(timeAt).toBeGreaterThan(-1);
+    expect(timeAt).toBeLessThan(step2At);
+  });
+
   it('SRV-WIRE-02: mode, start and confident over the wire confirm the item', async () => {
     const ann = await h.addPlayer('p1', 'Ann');
     const send = async (msg: object): Promise<void> => {
@@ -804,42 +818,5 @@ describe('click path over the wire', () => {
     await h.setConfident('p1', 1);
     expect(h.phase()).toBe('confident');
     expect(h.check().outcome).toMatchObject({ result: 'confident', confident: ['p1'] });
-  });
-});
-
-// The Worker deployed before confidence checks (party/server.ts at 898e254) was a bare
-// YServer. It never sends `time` and drops every custom message, so every confidence
-// request is silently lost. That is what "the button doesn't do anything" looks like.
-describe('a Worker from before confidence checks', () => {
-  async function legacyServer() {
-    const { YServer } = await import('y-partyserver');
-    class LegacyPoker extends YServer {}
-    type Args = ConstructorParameters<typeof LegacyPoker>;
-    type Conn = Parameters<LegacyPoker['onMessage']>[0];
-    type Ctx = Parameters<LegacyPoker['onConnect']>[1];
-    const server = new LegacyPoker(
-      { storage: new FakeStorage(), id: { name: 'planning-poker-OLD' } } as unknown as Args[0],
-      {} as Args[1],
-    );
-    await server.onStart();
-    const fake = new FakeConnection('c1');
-    const conn = fake as unknown as Conn;
-    (server as unknown as { connections: Map<string, FakeConnection> }).connections.set('c1', fake);
-    server.onConnect(conn, { request: new Request('http://x') } as unknown as Ctx);
-    return { server, fake, conn };
-  }
-
-  it('SRV-LEGACY-01: sends no time and drops a mode request', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { server, fake, conn } = await legacyServer();
-    expect(fake.custom()).toEqual([]);
-    server.onMessage(conn, `__YPS:${JSON.stringify(mode('confidence', 0))}`);
-    await flush();
-    expect(server.document.getMap('session').get('mode')).toBeUndefined();
-    expect(fake.custom()).toEqual([]);
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('onCustomMessage is not implemented'),
-      expect.any(String),
-    );
   });
 });

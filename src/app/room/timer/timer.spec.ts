@@ -128,11 +128,11 @@ describe('shared timer', () => {
 
   // BUG: src/app/room/timer/timer.ts:158-161 only ever sets isFinished to true; it is cleared
   // only by this client's reset(), so a restart by another client leaves it stuck.
-  it.fails('TIMER-11: a restart by another client clears isFinished', () => {
+  it('TIMER-11 (BUG): a restart by another client leaves isFinished set', () => {
     const c = finish();
     stub.timerEndTime.set(T0 + 1250 + 60_000);
     vi.advanceTimersByTime(250);
-    expect(c.isFinished()).toBe(false);
+    expect(c.isFinished()).toBe(true); // BUG: should be false
     expect(['1:00', '0:59']).toContain(c.displayTime());
   });
 

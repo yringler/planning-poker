@@ -9,12 +9,13 @@ import {
   ITEM_URL_KEY,
   MODE_KEY,
   checkPhase,
+  normaliseCheck,
+  parseServerMessage,
   type CheckAction,
   type CheckState,
   type ClientMessage,
   type HistoryEntry,
   type RoomMode,
-  type ServerMessage,
 } from '../shared/confidence-protocol';
 import {
   confidencePlayers,
@@ -233,7 +234,7 @@ export class RoomService {
       this.timerVisible.set((sessionMap.get('timerVisible') as boolean) ?? false);
       this.mode.set(sessionMap.get(MODE_KEY) === 'confidence' ? 'confidence' : 'points');
       this.itemUrl.set((sessionMap.get(ITEM_URL_KEY) as string) ?? '');
-      this.check.set((sessionMap.get(CHECK_KEY) as CheckState) ?? null);
+      this.check.set(sessionMap.has(CHECK_KEY) ? normaliseCheck(sessionMap.get(CHECK_KEY)) : null);
       this.trackMidCheckJoin(!synced);
     };
     sessionMap.observe(syncSession);
@@ -566,13 +567,8 @@ export class RoomService {
   }
 
   private onServerMessage(raw: string): void {
-    let msg: ServerMessage;
-    try {
-      msg = JSON.parse(raw) as ServerMessage;
-    } catch {
-      return;
-    }
-    if (msg.type === 'time' && typeof msg.now === 'number') {
+    const msg = parseServerMessage(raw);
+    if (msg?.type === 'time') {
       // Ignores one-way latency (tens of ms), which is fine for a 1-minute countdown
       this.serverOffset.set(msg.now - Date.now());
       this.serverReady.set(true);

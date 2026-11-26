@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { CheckOutcome, HistoryEntry } from '../shared/confidence-protocol';
+import {
+  normaliseCheck,
+  type CheckOutcome,
+  type HistoryEntry,
+} from '../shared/confidence-protocol';
 import {
   confidencePlayers,
   confidentIdsForRound,
@@ -122,10 +126,10 @@ describe('confidencePlayers', () => {
     }
   });
 
-  // BUG: src/app/services/room.service.ts:222 casts session.check without normaliseCheck, so
-  // an outcome missing notConfident reaches Object.entries(undefined) at room-logic.ts:58.
-  it.fails('CLI-CPL-07: an outcome without notConfident does not throw', () => {
-    const outcome = { result: 'paused', at: 0, confident: [] } as unknown as CheckOutcome;
+  // RoomService passes session.check through normaliseCheck, so a stored outcome missing
+  // notConfident reaches confidencePlayers with an empty one.
+  it('CLI-CPL-07: an outcome stored without notConfident does not throw', () => {
+    const { outcome } = normaliseCheck({ startedAt: T0, outcome: { result: 'paused' } });
     expect(confidencePlayers([P('Ann', 'p1')], {}, 'paused', outcome)).toEqual([P('Ann', 'p1')]);
   });
 });
@@ -175,10 +179,9 @@ describe('resolveHistory', () => {
   // BUG: src/app/services/room-logic.ts:91-104 (was room.service.ts:171-184) only
   // names an online voter when entry.players holds the same name under an old offline peerId,
   // so an online voter missing from names and entry.players stays unnamed.
-  it.fails('CLI-HIST-06: an online voter is named from the current players', () => {
-    expect(players(resolveHistory([E({ p2: '5' }, {})], [P('Ann', 'p2')], {}))).toEqual({
-      p2: 'Ann',
-    });
+  it('CLI-HIST-06 (BUG): an online voter is not named from the current players', () => {
+    // BUG: should be { p2: 'Ann' }
+    expect(players(resolveHistory([E({ p2: '5' }, {})], [P('Ann', 'p2')], {}))).toEqual({});
   });
 
   it('CLI-HIST-07: an empty entry name falls back to names', () => {

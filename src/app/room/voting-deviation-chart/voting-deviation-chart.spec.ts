@@ -97,12 +97,14 @@ describe('chartData', () => {
 
   // BUG: src/app/room/voting-deviation-chart/voting-deviation-chart.ts:127 adds an 'Unknown'
   // player for unnamed voters, but :137 looks peerIds up by name, so that dataset is all null.
-  it.fails('CHART-09: no all-null dataset for unnamed voters', () => {
+  it('CHART-09 (BUG): unnamed voters get an all-null dataset', () => {
     const players = { p1: 'Ann' };
     rounds(R({ p9: '5', p1: '3' }, players), R({ p9: '5', p1: '3' }, players));
-    for (const d of c.chartData().datasets) {
-      expect(d.data.every((v) => v === null)).toBe(false);
-    }
+    const allNull = c
+      .chartData()
+      .datasets.filter((d) => d.data.every((v) => v === null))
+      .map((d) => d.label);
+    expect(allNull).toEqual(['Unknown', 'Unknown (avg |z|)']); // BUG: should be []
   });
 
   it('CHART-10: colours wrap after 10 players', () => {

@@ -122,6 +122,21 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   return null;
 }
 
+/** Parses a server message; returns null for anything malformed. */
+export function parseServerMessage(raw: string): ServerMessage | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!isRecord(data)) return null;
+  if (data['type'] === 'time' && isFiniteNumber(data['now'])) {
+    return { type: 'time', now: data['now'] };
+  }
+  return null;
+}
+
 /** Coerces whatever is stored in `session.check` into a valid CheckState. */
 export function normaliseCheck(value: unknown): CheckState {
   const v = isRecord(value) ? value : {};

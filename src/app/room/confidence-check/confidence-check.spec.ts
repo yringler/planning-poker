@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createRoomServiceStub, type RoomServiceStub } from '../../../testing/room-service-stub';
 import { RoomService, type CheckOutcome, type Player } from '../../services/room.service';
+import { normaliseCheck } from '../../shared/confidence-protocol';
 import { ConfidenceCheckComponent } from './confidence-check';
 
 const T0 = 1_700_000_000_000;
@@ -72,10 +73,10 @@ describe('ConfidenceCheckComponent', () => {
     expect(c.iWasNotConfident()).toBe(false);
   });
 
-  // BUG: src/app/room/confidence-check/confidence-check.ts:324,329 read outcome.notConfident
-  // unguarded; root cause is the unchecked session.check cast in room.service.ts:222.
-  it.fails('CC-06: an outcome without notConfident does not throw', () => {
-    stub.checkOutcome.set({ result: 'paused', at: 0, confident: [] } as unknown as CheckOutcome);
+  // RoomService passes session.check through normaliseCheck, so a stored outcome missing
+  // notConfident reaches the component with an empty one.
+  it('CC-06: an outcome stored without notConfident does not throw', () => {
+    stub.checkOutcome.set(normaliseCheck({ startedAt: 0, outcome: { result: 'paused' } }).outcome);
     expect(c.notConfident()).toEqual([]);
     expect(c.iWasNotConfident()).toBe(false);
   });

@@ -70,7 +70,18 @@ export class PlanningPoker extends YServer<Env> {
 
   override onConnect(conn: Connection, ctx: ConnectionContext): void {
     super.onConnect(conn, ctx);
+    // INVARIANT: send `time` synchronously here, before any `await`. The client treats a server
+    // that hasn't sent `time` by the time it syncs as outdated (RoomService `serverOutdated`), and
+    // its sync completes with our reply to its first sync message. Sending `time` now puts it
+    // ahead of that reply. Pinned by SRV-WIRE-03.
     this.sendTime(conn);
+  }
+
+  override onClose(conn: Connection, code: number, reason: string, wasClean: boolean): void {
+    super.onClose(conn, code, reason, wasClean);
+    // y-partyserver only fires an awareness change for the awareness ids it recorded on this
+    // connection. A player known through `hello` alone leaves without one, so re-evaluate here.
+    this.queueEvaluate();
   }
 
   override async onCustomMessage(conn: Connection, raw: string): Promise<void> {
